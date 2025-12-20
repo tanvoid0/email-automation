@@ -1,0 +1,128 @@
+import nodemailer from "nodemailer";
+
+const smtpConfig = {
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || "587"),
+  secure: process.env.SMTP_PORT === "465", // true for 465, false for other ports
+  requireTLS: process.env.SMTP_REQUIRE_TLS === "true", // Some servers require TLS
+  auth: {
+    user: process.env.SMTP_USER?.trim(),
+    pass: process.env.SMTP_PASS?.trim(), // Trim any whitespace that might cause issues
+  },
+  // Connection timeout (in milliseconds) - default 30 seconds (increased for slow connections)
+  connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT || "30000"),
+  // Socket timeout (in milliseconds) - default 30 seconds (increased for slow connections)
+  socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT || "30000"),
+  // Greeting timeout (in milliseconds) - default 10 seconds (increased)
+  greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT || "10000"),
+  // Additional options for university email servers
+  tls: {
+    // Do not fail on invalid certificates (some university servers use self-signed certs)
+    // For Tencent Exmail, this should be true when using the correct hostname (smtp.exmail.qq.com)
+    rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== "false",
+  },
+};
+
+export async function sendEmail({
+  to,
+  subject,
+  text,
+  html,
+  attachments,
+}: {
+  to: string;
+  subject: string;
+  text?: string;
+  html?: string;
+  attachments?: Array<{
+    filename: string;
+    path?: string;
+    content?: string | Buffer;
+  }>;
+}) {
+  if (!smtpConfig.host || !smtpConfig.auth.user || !smtpConfig.auth.pass) {
+    throw new Error("SMTP configuration is incomplete. Please check your .env.local file.");
+  }
+
+  // Log configuration (without showing full password for security)
+  console.log(`[SMTP] Config check - Host: ${smtpConfig.host}, Port: ${smtpConfig.port}, User: ${smtpConfig.auth.user}`);
+  console.log(`[SMTP] Password provided: ${smtpConfig.auth.pass ? 'Yes' : 'No'}, Length: ${smtpConfig.auth.pass?.length || 0} chars`);
+  console.log(`[SMTP] Secure mode: ${smtpConfig.secure}, Require TLS: ${smtpConfig.requireTLS}`);
+
+  const transporter = nodemailer.createTransport(smtpConfig);
+
+  const mailOptions = {
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to,
+    subject,
+    text,
+    html,
+    attachments,
+  };
+
+  try {
+    // Optionally verify connection first (can be disabled if it causes timeouts)
+    const skipVerify = process.env.SMTP_SKIP_VERIFY === "true";
+    
+    if (!skipVerify) {
+      console.log(`[SMTP] Attempting to verify connection to ${smtpConfig.host}:${smtpConfig.port}...`);
+      try {
+        await transporter.verify();
+        console.log(`[SMTP] Connection verified successfully`);
+      } catch (verifyError: any) {
+        console.warn(`[SMTP] Connection verification failed, but continuing anyway:`, verifyError.message);
+        // Continue anyway - some servers don't support verify() but can still send emails
+      }
+    } else {
+      console.log(`[SMTP] Skipping connection verification (SMTP_SKIP_VERIFY=true)`);
+    }
+
+    // Send email with timeout
+    console.log(`[SMTP] Sending email to ${to}...`);
+    const startTime = Date.now();
+    const info = await transporter.sendMail(mailOptions);
+    const duration = Date.now() - startTime;
+    console.log(`[SMTP] Email sent successfully in ${duration}ms. Message ID: ${info.messageId}`);
+    
+    return {
+      success: true,
+      messageId: info.messageId,
+    };
+  } catch (error: any) {
+    console.error("[SMTP] Error sending email:", error);
+    
+    // Provide more helpful error messages
+    if (error.code === "ETIMEDOUT" || error.code === "ECONNRESET") {
+      throw new Error(`SMTP connection timeout. Please check your network connection and SMTP server settings.`);
+    } else if (error.code === "EAUTH") {
+      const isExmail = smtpConfig.host?.includes("exmail.qq.com");
+      const responseMessage = error.response || error.message || "";
+      const isSystemBusy = responseMessage.toLowerCase().includes("system busy") || responseMessage.includes("535");
+      
+      if (isExmail) {
+        let errorMsg = `SMTP authentication failed. `;
+        
+        if (isSystemBusy) {
+          errorMsg += `The "system busy" error usually means:\n`;
+          errorMsg += `1. You're using your regular password instead of an app-specific password\n`;
+          errorMsg += `2. SMTP service might not be enabled in your account settings\n`;
+          errorMsg += `3. Too many failed attempts (wait 5-10 minutes and try again)\n\n`;
+          errorMsg += `Solution: Generate an app-specific password in Exmail Settings → Account → Email Binding, then use it in SMTP_PASS.`;
+        } else {
+          errorMsg += `Tencent Exmail requires an app-specific password (not your regular password). Please generate one in your Exmail settings and use it in SMTP_PASS.`;
+        }
+        
+        throw new Error(errorMsg);
+      } else {
+        throw new Error(`SMTP authentication failed. Please check your email and password. If your email provider requires app passwords, use an app-specific password instead of your regular password.`);
+      }
+    } else if (error.code === "ECONNREFUSED") {
+      throw new Error(`Cannot connect to SMTP server. Please check SMTP_HOST and SMTP_PORT settings.`);
+    } else if (error.message) {
+      throw new Error(`SMTP error: ${error.message}`);
+    } else {
+      throw error;
+    }
+  }
+}
+
