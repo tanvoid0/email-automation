@@ -10,15 +10,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { professorSchema, type ProfessorFormData } from "@/lib/validations/professor";
+import { applicationSchema, type ApplicationFormData } from "@/lib/validations/application";
 import { FormField } from "@/components/ui/form";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Sparkles, Save, Wand2 } from "lucide-react";
 import Link from "next/link";
 import { replaceTemplatePlaceholders } from "@/lib/utils/template";
 import { DEFAULT_EMAIL_TEMPLATE } from "@/lib/constants/emailTemplate";
 import { EmailDiff } from "@/app/components/EmailDiff";
+import { FileAttachments } from "@/app/components/FileAttachments";
+import { Attachment } from "@/lib/utils/attachments";
 
-interface Professor {
+interface Application {
   _id: string;
   name: string;
   university: string;
@@ -27,7 +29,7 @@ interface Professor {
   status: string;
 }
 
-export default function EditProfessorPage() {
+export default function EditApplicationPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
@@ -36,7 +38,8 @@ export default function EditProfessorPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCustomizing, setIsCustomizing] = useState(false);
   const [customizedEmail, setCustomizedEmail] = useState<string | null>(null);
-  const [professor, setProfessor] = useState<Professor | null>(null);
+  const [application, setApplication] = useState<Application | null>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const {
     register,
@@ -45,8 +48,8 @@ export default function EditProfessorPage() {
     watch,
     setValue,
     reset,
-  } = useForm<ProfessorFormData>({
-    resolver: zodResolver(professorSchema),
+  } = useForm<ApplicationFormData>({
+    resolver: zodResolver(applicationSchema) as any,
     defaultValues: {
       name: "",
       university: "",
@@ -56,28 +59,51 @@ export default function EditProfessorPage() {
   });
 
   const emailText = watch("emailText");
-  const professorName = watch("name");
+  const recipientName = watch("name");
   const universityName = watch("university");
 
-  // Load professor data
+  // Load application data
   useEffect(() => {
-    const loadProfessor = async () => {
+    const loadApplication = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(`/api/professors/${id}`);
+        const response = await fetch(`/api/applications/${id}`);
         if (!response.ok) {
-          throw new Error("Failed to load professor");
+          throw new Error("Failed to load application");
         }
         const data = await response.json();
-        setProfessor(data);
+        setApplication(data);
         reset({
           name: data.name,
           university: data.university,
           email: data.email,
           emailText: data.emailText,
         });
+        // Load attachments by ID if they exist
+        if (data.attachments && data.attachments.length > 0) {
+          try {
+            const attachmentsResponse = await fetch("/api/attachments/batch", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ids: data.attachments }),
+            });
+            if (attachmentsResponse.ok) {
+              const attachmentsData = await attachmentsResponse.json();
+              setAttachments(attachmentsData.map((att: any) => ({
+                filename: att.filename,
+                content: att.content,
+                contentType: att.contentType,
+              })));
+            }
+          } catch (error) {
+            console.warn("Failed to load attachments:", error);
+            setAttachments([]);
+          }
+        } else {
+          setAttachments([]);
+        }
       } catch (error: any) {
-        toast.error(`Error loading professor: ${error.message}`);
+        toast.error(`Error loading application: ${error.message}`);
         router.push("/");
       } finally {
         setIsLoading(false);
@@ -85,12 +111,12 @@ export default function EditProfessorPage() {
     };
 
     if (id) {
-      loadProfessor();
+      loadApplication();
     }
   }, [id, reset, router]);
 
   const handleCustomize = async () => {
-    if (!professorName || !universityName || !emailText) {
+    if (!recipientName || !universityName || !emailText) {
       return;
     }
 
@@ -103,8 +129,8 @@ export default function EditProfessorPage() {
         },
         body: JSON.stringify({
           baseTemplate: emailText,
-          professorName,
-          universityName,
+          professorName: recipientName,
+          universityName: universityName,
         }),
       });
 
@@ -124,7 +150,7 @@ export default function EditProfessorPage() {
     }
   };
 
-  const onSubmit = async (data: ProfessorFormData) => {
+  const onSubmit = async (data: ApplicationFormData) => {
     setIsSubmitting(true);
     try {
       // Load user profile for personal info placeholders
@@ -155,7 +181,7 @@ export default function EditProfessorPage() {
         });
       }
 
-      const response = await fetch(`/api/professors/${id}`, {
+      const response = await fetch(`/api/applications/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -165,18 +191,19 @@ export default function EditProfessorPage() {
           university: data.university,
           email: data.email,
           emailText: finalEmailText,
+          attachments: attachments,
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to update professor");
+        throw new Error(error.error || "Failed to update application");
       }
 
-      toast.success("Professor updated successfully!");
+      toast.success("Application updated successfully!");
       router.push("/");
     } catch (error: any) {
-      toast.error(`Error updating professor: ${error.message}`);
+      toast.error(`Error updating application: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -185,23 +212,21 @@ export default function EditProfessorPage() {
   if (isLoading) {
     return (
       <main className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-4xl mx-auto flex items-center justify-center h-64">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-6 w-6 animate-spin" />
-            <p className="text-muted-foreground">Loading professor...</p>
-          </div>
+        <div className="max-w-4xl mx-auto flex flex-col items-center justify-center h-64 gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground font-medium">Loading application...</p>
         </div>
       </main>
     );
   }
 
-  if (!professor) {
+  if (!application) {
     return (
       <main className="min-h-screen bg-background p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           <Card>
             <CardContent className="py-8 text-center">
-              <p className="text-muted-foreground mb-4">Professor not found</p>
+              <p className="text-muted-foreground mb-4">Application not found</p>
               <Link href="/">
                 <Button variant="outline">
                   <ArrowLeft className="h-4 w-4 mr-2" />
@@ -217,33 +242,33 @@ export default function EditProfessorPage() {
 
   return (
     <main className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Link href="/">
-            <Button variant="outline" size="sm">
+      <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+          <Link href="/" className="w-full sm:w-auto">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
           </Link>
-          <div>
-            <h1 className="text-3xl font-bold">Edit Professor</h1>
-            <p className="text-muted-foreground">
-              Update professor details and email template
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold">Edit Application</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              Update application details and email template
             </p>
           </div>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Professor Information</CardTitle>
+            <CardTitle>Application Information</CardTitle>
             <CardDescription>
-              Update the professor details. AI customization is optional.
+              Update the application details. AI customization is optional.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label="Professor Name" error={errors.name?.message}>
+                <FormField label="Recipient Name" error={errors.name?.message}>
                   <Input
                     placeholder="e.g., Weifeng He"
                     {...register("name")}
@@ -258,7 +283,7 @@ export default function EditProfessorPage() {
                   />
                 </FormField>
               </div>
-              <FormField label="Professor Email" error={errors.email?.message}>
+              <FormField label="Recipient Email" error={errors.email?.message}>
                 <Input
                   type="email"
                   placeholder="e.g., hewf@sjtu.edu.cn"
@@ -273,21 +298,53 @@ export default function EditProfessorPage() {
                   className={`font-mono text-sm ${errors.emailText ? "border-destructive" : ""}`}
                 />
               </FormField>
-              <div className="flex gap-2">
+              <div className="space-y-2">
+                <Label>Attachments (Optional)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Add files specific to this application. These will be merged with template attachments.
+                </p>
+                <FileAttachments
+                  attachments={attachments}
+                  onAttachmentsChange={setAttachments}
+                />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Button
                   type="button"
                   onClick={handleCustomize}
-                  disabled={isCustomizing || !professorName || !universityName}
+                  disabled={isCustomizing || !recipientName || !universityName}
                   variant="outline"
+                  className="w-full sm:w-auto border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:hover:bg-purple-950/30"
                 >
-                  {isCustomizing ? "Customizing..." : "Customize with AI (Optional)"}
+                  {isCustomizing ? (
+                    <>
+                      <Wand2 className="h-4 w-4 mr-2 animate-spin" />
+                      Customizing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Customize with AI (Optional)
+                    </>
+                  )}
                 </Button>
                 <Button 
                   type="submit"
                   variant="default"
                   disabled={isSubmitting}
+                  className="w-full sm:w-auto bg-primary hover:bg-primary/90"
                 >
-                  {isSubmitting ? "Updating..." : "Update Professor"}
+                  {isSubmitting ? (
+                    <>
+                      <Save className="h-4 w-4 mr-2 animate-pulse" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Update Application
+                    </>
+                  )}
                 </Button>
               </div>
               {customizedEmail && emailText && (

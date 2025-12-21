@@ -38,18 +38,41 @@ export async function sendEmail({
     filename: string;
     path?: string;
     content?: string | Buffer;
+    contentType?: string;
   }>;
 }) {
   if (!smtpConfig.host || !smtpConfig.auth.user || !smtpConfig.auth.pass) {
     throw new Error("SMTP configuration is incomplete. Please check your .env.local file.");
   }
 
-  // Log configuration (without showing full password for security)
-  console.log(`[SMTP] Config check - Host: ${smtpConfig.host}, Port: ${smtpConfig.port}, User: ${smtpConfig.auth.user}`);
-  console.log(`[SMTP] Password provided: ${smtpConfig.auth.pass ? 'Yes' : 'No'}, Length: ${smtpConfig.auth.pass?.length || 0} chars`);
-  console.log(`[SMTP] Secure mode: ${smtpConfig.secure}, Require TLS: ${smtpConfig.requireTLS}`);
+  // Log configuration (without exposing sensitive data)
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[SMTP] Config check - Host: ${smtpConfig.host}, Port: ${smtpConfig.port}`);
+    console.log(`[SMTP] Secure mode: ${smtpConfig.secure}, Require TLS: ${smtpConfig.requireTLS}`);
+  }
 
   const transporter = nodemailer.createTransport(smtpConfig);
+
+  // Convert base64 attachments to Buffer format for nodemailer
+  const formattedAttachments = attachments?.map(att => {
+    const attachment: any = {
+      filename: att.filename,
+    };
+    
+    if (att.content) {
+      if (typeof att.content === 'string') {
+        attachment.content = Buffer.from(att.content, 'base64');
+      } else {
+        attachment.content = att.content;
+      }
+    }
+    
+    if (att.contentType) {
+      attachment.contentType = att.contentType;
+    }
+    
+    return attachment;
+  });
 
   const mailOptions = {
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
@@ -57,7 +80,7 @@ export async function sendEmail({
     subject,
     text,
     html,
-    attachments,
+    attachments: formattedAttachments,
   };
 
   try {

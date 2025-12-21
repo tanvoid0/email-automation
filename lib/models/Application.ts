@@ -1,8 +1,8 @@
 import { prop, getModelForClass, modelOptions } from "@typegoose/typegoose";
 import mongoose from "mongoose";
 
-@modelOptions({ schemaOptions: { timestamps: true } })
-export class Professor {
+@modelOptions({ schemaOptions: { timestamps: true, collection: "applications" } })
+export class Application {
   @prop({ required: true })
   public name!: string;
 
@@ -24,6 +24,14 @@ export class Professor {
 
   @prop({ required: false })
   public error?: string;
+
+  @prop({ 
+    required: false, 
+    type: [String],
+    default: []
+  })
+  public attachments?: string[]; // Array of attachment IDs
 }
 
-export const ProfessorModel = mongoose.models.Professor || getModelForClass(Professor);
+export const ApplicationModel = mongoose.models.Application || getModelForClass(Application);
+

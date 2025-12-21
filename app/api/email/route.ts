@@ -19,17 +19,21 @@ export async function GET() {
   }
 
   if (MOCK_EMAIL) {
-    console.log("=".repeat(60));
-    console.log("📧 TEST EMAIL (MOCK MODE)");
-    console.log("=".repeat(60));
-    console.log("To:", testEmail);
-    console.log("Subject: Test Email - SMTP Configuration");
-    console.log("From:", process.env.SMTP_FROM || process.env.SMTP_USER || "your-email@stu.yzu.edu.cn");
-    console.log("\nEmail Body:");
-    console.log("This is a test email to verify your SMTP configuration is working correctly.");
-    console.log("=".repeat(60));
-    console.log("✅ Test email would be sent successfully (MOCK MODE)");
-    console.log("=".repeat(60));
+    if (process.env.NODE_ENV === "development") {
+      console.log("=".repeat(60));
+      console.log("📧 TEST EMAIL (MOCK MODE)");
+      console.log("=".repeat(60));
+      console.log("To:", testEmail);
+      console.log("Subject: Test Email - SMTP Configuration");
+      console.log("From:", process.env.SMTP_FROM || "[REDACTED]");
+      console.log("\nEmail Body:");
+      console.log("This is a test email to verify your SMTP configuration is working correctly.");
+      console.log("=".repeat(60));
+      console.log("✅ Test email would be sent successfully (MOCK MODE)");
+      console.log("=".repeat(60));
+    } else {
+      console.log(`[Mock Test Email] Would send to ${testEmail}`);
+    }
 
     return NextResponse.json({
       success: true,
@@ -46,10 +50,10 @@ export async function GET() {
       setTimeout(() => reject(new Error(`Request timeout after ${timeoutMs / 1000} seconds`)), timeoutMs);
     });
 
-    console.log(`[Email API] Sending test email to ${testEmail} (timeout: ${timeoutMs}ms)...`);
-    console.log(`[Email API] SMTP Config: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}, User: ${process.env.SMTP_USER}`);
-    console.log(`[Email API] Password length: ${process.env.SMTP_PASS?.length || 0} characters`);
-    console.log(`[Email API] Note: App passwords are usually 16 characters. If your password is shorter, you might be using your regular password.`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[Email API] Sending test email to ${testEmail} (timeout: ${timeoutMs}ms)...`);
+      console.log(`[Email API] SMTP Config: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}`);
+    }
     
     const emailPromise = sendEmail({
       to: testEmail,
@@ -101,20 +105,26 @@ export async function POST(request: NextRequest) {
 
     if (MOCK_EMAIL) {
       // Mock email sending - logs to console instead of actually sending
-      console.log("=".repeat(60));
-      console.log("📧 MOCK EMAIL SEND (Email sending is mocked)");
-      console.log("=".repeat(60));
-      console.log("To:", to);
-      console.log("Subject:", subject);
-      console.log("From:", process.env.SMTP_FROM || process.env.SMTP_USER || "your-email@stu.yzu.edu.cn");
-      console.log("\nEmail Body:");
-      console.log(text || html);
-      if (attachments && attachments.length > 0) {
-        console.log("\nAttachments:", attachments.map((a: any) => a.filename).join(", "));
+      // Note: In production, avoid logging full email content to protect privacy
+      if (process.env.NODE_ENV === "development") {
+        console.log("=".repeat(60));
+        console.log("📧 MOCK EMAIL SEND (Email sending is mocked)");
+        console.log("=".repeat(60));
+        console.log("To:", to);
+        console.log("Subject:", subject);
+        console.log("From:", process.env.SMTP_FROM || "[REDACTED]");
+        console.log("\nEmail Body:");
+        console.log(text || html);
+        if (attachments && attachments.length > 0) {
+          console.log("\nAttachments:", attachments.map((a: any) => a.filename).join(", "));
+        }
+        console.log("=".repeat(60));
+        console.log("✅ Email would be sent successfully");
+        console.log("=".repeat(60));
+      } else {
+        // In production, only log minimal info
+        console.log(`[Mock Email] Would send to ${to}, subject: ${subject}`);
       }
-      console.log("=".repeat(60));
-      console.log("✅ Email would be sent successfully");
-      console.log("=".repeat(60));
 
       // Simulate a small delay
       await new Promise((resolve) => setTimeout(resolve, 500));

@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-export const professorSchema = z.object({
+export const applicationSchema = z.object({
   name: z
     .string()
-    .min(1, "Professor name is required")
-    .min(2, "Professor name must be at least 2 characters"),
+    .min(1, "Recipient name is required")
+    .min(2, "Recipient name must be at least 2 characters"),
   university: z
     .string()
     .min(1, "University name is required")
@@ -17,7 +17,8 @@ export const professorSchema = z.object({
     .string()
     .min(1, "Email text is required")
     .min(10, "Email text must be at least 10 characters"),
+  attachments: z.array(z.string()).optional().default([]), // Array of attachment IDs
 });
 
-export type ProfessorFormData = z.infer<typeof professorSchema>;
+export type ApplicationFormData = z.infer<typeof applicationSchema>;
 

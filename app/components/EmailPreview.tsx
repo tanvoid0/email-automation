@@ -27,10 +27,10 @@ export function EmailPreview({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Email Preview</CardTitle>
-            <CardDescription>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-lg sm:text-xl">Email Preview</CardTitle>
+            <CardDescription className="text-xs sm:text-sm break-words">
               To: {professorName} ({professorEmail})
             </CardDescription>
           </div>
@@ -38,6 +38,7 @@ export function EmailPreview({
             variant="outline"
             size="sm"
             onClick={() => setShowOriginal(!showOriginal)}
+            className="w-full sm:w-auto"
           >
             {showOriginal ? (
               <>

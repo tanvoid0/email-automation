@@ -4,15 +4,13 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { EmailForm } from "./components/EmailForm";
-import { ProfessorList, type Professor } from "./components/ProfessorList";
-import { EmailPreview } from "./components/EmailPreview";
+import { ApplicationList, type Application } from "./components/ApplicationList";
+import { Plus, Settings, Mail, Loader2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default function Home() {
-  const [professors, setProfessors] = useState<Professor[]>([]);
-  const [selectedProfessor, setSelectedProfessor] = useState<Professor | null>(null);
+  const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [bulkSendProgress, setBulkSendProgress] = useState<{
     total: number;
@@ -41,121 +39,104 @@ export default function Home() {
     }
   };
 
-  // Load professors from MongoDB on mount
+  // Load applications from MongoDB on mount
   useEffect(() => {
-    loadProfessors();
+    loadApplications();
   }, []);
 
-  const loadProfessors = async () => {
+  const loadApplications = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/professors");
+      const response = await fetch("/api/applications");
       if (!response.ok) {
-        throw new Error("Failed to load professors");
+        throw new Error("Failed to load applications");
       }
       const data = await response.json();
-      // Convert MongoDB documents to Professor format
-      const formattedProfessors: Professor[] = data.map((p: any) => ({
-        id: p._id,
-        name: p.name,
-        university: p.university,
-        email: p.email,
-        emailText: p.emailText,
-        status: p.status || "pending",
-        error: p.error,
-      }));
-      setProfessors(formattedProfessors);
+      console.log("[Home] Loaded applications from API:", {
+        count: data.length,
+        applicationsWithAttachments: data.filter((p: any) => p.attachments && p.attachments.length > 0).length,
+      });
+      
+      // Fetch all attachment IDs from all applications
+      const allAttachmentIds = new Set<string>();
+      data.forEach((p: any) => {
+        if (p.attachments && Array.isArray(p.attachments)) {
+          p.attachments.forEach((id: string) => allAttachmentIds.add(id));
+        }
+      });
+
+      // Fetch all attachments in batch
+      let attachmentsMap = new Map<string, any>();
+      if (allAttachmentIds.size > 0) {
+        try {
+          const attachmentsResponse = await fetch("/api/attachments/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: Array.from(allAttachmentIds) }),
+          });
+          if (attachmentsResponse.ok) {
+            const attachments = await attachmentsResponse.json();
+            attachments.forEach((att: any) => {
+              attachmentsMap.set(att._id, att);
+            });
+          }
+        } catch (error) {
+          console.warn("Failed to fetch attachments:", error);
+        }
+      }
+      
+      // Convert MongoDB documents to Application format
+      const formattedApplications: Application[] = data.map((p: any) => {
+        // Convert attachment IDs to attachment objects for display
+        const attachmentObjects = (p.attachments || [])
+          .map((id: string) => attachmentsMap.get(id))
+          .filter((att: any) => att !== undefined)
+          .map((att: any) => ({
+            id: att._id,
+            filename: att.filename,
+            content: att.content,
+            contentType: att.contentType,
+          }));
+
+        const application = {
+          id: p._id,
+          name: p.name,
+          university: p.university,
+          email: p.email,
+          emailText: p.emailText,
+          status: p.status || "pending",
+          error: p.error,
+          attachments: attachmentObjects,
+          attachmentIds: p.attachments || [], // Keep IDs for API calls
+        };
+        
+        if (application.attachments.length > 0) {
+          console.log("[Home] Application with attachments:", {
+            name: application.name,
+            attachmentsCount: application.attachments.length,
+            attachments: application.attachments.map((a: any) => a.filename),
+          });
+        }
+        
+        return application;
+      });
+      setApplications(formattedApplications);
     } catch (error: any) {
-      console.error("Error loading professors:", error);
-      toast.error(`Error loading professors: ${error.message}`);
+      console.error("Error loading applications:", error);
+      toast.error(`Error loading applications: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAddProfessor = async (professorData: {
-    name: string;
-    university: string;
-    email: string;
-    baseTemplate: string;
-  }) => {
-    try {
-      const response = await fetch("/api/professors", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: professorData.name,
-          university: professorData.university,
-          email: professorData.email,
-          emailText: professorData.baseTemplate,
-        }),
-      });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to add professor");
-      }
-
-      const newProfessor = await response.json();
-      
-      // Add to local state
-      const formattedProfessor: Professor = {
-        id: newProfessor._id,
-        name: newProfessor.name,
-        university: newProfessor.university,
-        email: newProfessor.email,
-        emailText: newProfessor.emailText,
-        status: newProfessor.status || "pending",
-        error: newProfessor.error,
-      };
-      
-      setProfessors([formattedProfessor, ...professors]);
-      toast.success("Professor added successfully!");
-    } catch (error: any) {
-      toast.error(`Error adding professor: ${error.message}`);
-      throw error;
-    }
-  };
-
-  const handleCustomizeEmail = async (
-    baseTemplate: string,
-    professorName: string,
-    universityName: string
-  ): Promise<string> => {
-    try {
-      const response = await fetch("/api/gemini", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          baseTemplate,
-          professorName,
-          universityName,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to customize email");
-      }
-
-      const data = await response.json();
-      return data.customizedText;
-    } catch (error: any) {
-      throw error;
-    }
-  };
-
-  const updateProfessorStatus = async (
+  const updateApplicationStatus = async (
     id: string,
-    status: Professor["status"],
+    status: Application["status"],
     error?: string
   ) => {
     try {
-      const response = await fetch(`/api/professors/${id}`, {
+      const response = await fetch(`/api/applications/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -164,23 +145,23 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update professor status");
+        throw new Error("Failed to update application status");
       }
 
       return await response.json();
     } catch (error: any) {
-      console.error("Error updating professor status:", error);
+      console.error("Error updating application status:", error);
     }
   };
 
-  const handleSendEmail = async (professor: Professor) => {
+  const handleSendEmail = async (application: Application) => {
     // Update status to sending
-    setProfessors(
-      professors.map((p) =>
-        p.id === professor.id ? { ...p, status: "sending" as const } : p
+    setApplications(
+      applications.map((p) =>
+        p.id === application.id ? { ...p, status: "sending" as const } : p
       )
     );
-    await updateProfessorStatus(professor.id, "sending");
+    await updateApplicationStatus(application.id, "sending");
 
     try {
       // Load user profile to replace any remaining placeholders
@@ -194,26 +175,28 @@ export default function Home() {
         console.warn("Failed to load user profile for email sending");
       }
 
-      // Load template to get subject
+      // Load template to get subject and attachments
       let templateSubject = null;
+      let templateAttachments: any[] = [];
       try {
         const templateResponse = await fetch("/api/template");
         if (templateResponse.ok) {
           const templateData = await templateResponse.json();
           templateSubject = templateData.subject;
+          templateAttachments = templateData.attachments || [];
         }
       } catch (error) {
         console.warn("Failed to load template for email sending");
       }
 
       // Replace any remaining placeholders in email text
-      let finalEmailText = professor.emailText;
+      let finalEmailText = application.emailText;
       if (userProfile) {
         const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
         finalEmailText = replaceTemplatePlaceholders(finalEmailText, {
-          professorName: professor.name,
-          professorEmail: professor.email,
-          universityName: professor.university,
+          professorName: application.name,
+          professorEmail: application.email,
+          universityName: application.university,
           yourName: userProfile.yourName,
           yourEmail: userProfile.yourEmail,
           yourDegree: userProfile.yourDegree,
@@ -229,9 +212,9 @@ export default function Home() {
       if (userProfile) {
         const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
         subject = replaceTemplatePlaceholders(subject, {
-          professorName: professor.name,
-          professorEmail: professor.email,
-          universityName: professor.university,
+          professorName: application.name,
+          professorEmail: application.email,
+          universityName: application.university,
           yourName: userProfile.yourName,
           yourEmail: userProfile.yourEmail,
           yourDegree: userProfile.yourDegree,
@@ -242,11 +225,38 @@ export default function Home() {
         // Replace basic placeholders even without profile
         const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
         subject = replaceTemplatePlaceholders(subject, {
-          professorName: professor.name,
-          professorEmail: professor.email,
-          universityName: professor.university,
+          professorName: application.name,
+          professorEmail: application.email,
+          universityName: application.university,
         });
       }
+
+      // Fetch application attachments by ID
+      let applicationAttachments: any[] = [];
+      if (application.attachmentIds && application.attachmentIds.length > 0) {
+        try {
+          const attachmentsResponse = await fetch("/api/attachments/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: application.attachmentIds }),
+          });
+          if (attachmentsResponse.ok) {
+            applicationAttachments = await attachmentsResponse.json();
+          }
+        } catch (error) {
+          console.warn("Failed to fetch application attachments:", error);
+        }
+      }
+
+      // Merge template attachments with application-specific attachments
+      const allAttachments = [
+        ...(templateAttachments || []),
+        ...applicationAttachments.map(att => ({
+          filename: att.filename,
+          content: att.content,
+          contentType: att.contentType,
+        })),
+      ];
 
       const response = await fetchWithTimeout(
         "/api/email",
@@ -256,9 +266,10 @@ export default function Home() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            to: professor.email,
+            to: application.email,
             subject,
             text: finalEmailText,
+            attachments: allAttachments.length > 0 ? allAttachments : undefined,
           }),
         },
         30000 // 30 second timeout
@@ -270,42 +281,42 @@ export default function Home() {
       }
 
       // Update status to sent
-      setProfessors(
-        professors.map((p) =>
-          p.id === professor.id ? { ...p, status: "sent" as const, error: undefined } : p
+      setApplications(
+        applications.map((p) =>
+          p.id === application.id ? { ...p, status: "sent" as const, error: undefined } : p
         )
       );
-      await updateProfessorStatus(professor.id, "sent");
-      toast.success(`Email sent to ${professor.name}`);
+      await updateApplicationStatus(application.id, "sent");
+      toast.success(`Email sent to ${application.name}`);
     } catch (error: any) {
       // Update status to error
-      setProfessors(
-        professors.map((p) =>
-          p.id === professor.id
+      setApplications(
+        applications.map((p) =>
+          p.id === application.id
             ? { ...p, status: "error" as const, error: error.message }
             : p
         )
       );
-      await updateProfessorStatus(professor.id, "error", error.message);
-      toast.error(`Failed to send email to ${professor.name}: ${error.message}`);
+      await updateApplicationStatus(application.id, "error", error.message);
+      toast.error(`Failed to send email to ${application.name}: ${error.message}`);
     }
   };
 
-  const handleBulkSend = async (professorIds: string[]) => {
-    const professorsToSend = professors.filter((p) => professorIds.includes(p.id));
-    const total = professorsToSend.length;
+  const handleBulkSend = async (applicationIds: string[]) => {
+    const applicationsToSend = applications.filter((p) => applicationIds.includes(p.id));
+    const total = applicationsToSend.length;
 
     // Initialize progress tracking
     setBulkSendProgress({ total, sent: 0, inProgress: true });
 
     // Update all to sending
-    for (const professor of professorsToSend) {
-      setProfessors((prev) =>
+    for (const application of applicationsToSend) {
+      setApplications((prev) =>
         prev.map((p) =>
-          p.id === professor.id ? { ...p, status: "sending" as const } : p
+          p.id === application.id ? { ...p, status: "sending" as const } : p
         )
       );
-      await updateProfessorStatus(professor.id, "sending");
+      await updateApplicationStatus(application.id, "sending");
     }
 
     // Load user profile once for all emails
@@ -319,13 +330,15 @@ export default function Home() {
       console.warn("Failed to load user profile for email sending");
     }
 
-    // Load template once for all emails to get subject
+    // Load template once for all emails to get subject and attachments
     let templateSubject = null;
+    let templateAttachments: any[] = [];
     try {
       const templateResponse = await fetch("/api/template");
       if (templateResponse.ok) {
         const templateData = await templateResponse.json();
         templateSubject = templateData.subject;
+        templateAttachments = templateData.attachments || [];
       }
     } catch (error) {
       console.warn("Failed to load template for email sending");
@@ -335,16 +348,16 @@ export default function Home() {
     let successCount = 0;
 
     // Send emails sequentially to avoid overwhelming the SMTP server
-    for (const professor of professorsToSend) {
+    for (const application of applicationsToSend) {
       try {
         // Replace any remaining placeholders in email text
-        let finalEmailText = professor.emailText;
+        let finalEmailText = application.emailText;
         if (userProfile) {
           const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
           finalEmailText = replaceTemplatePlaceholders(finalEmailText, {
-            professorName: professor.name,
-            professorEmail: professor.email,
-            universityName: professor.university,
+            professorName: application.name,
+            professorEmail: application.email,
+            universityName: application.university,
             yourName: userProfile.yourName,
             yourEmail: userProfile.yourEmail,
             yourDegree: userProfile.yourDegree,
@@ -360,9 +373,9 @@ export default function Home() {
         if (userProfile) {
           const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
           subject = replaceTemplatePlaceholders(subject, {
-            professorName: professor.name,
-            professorEmail: professor.email,
-            universityName: professor.university,
+            professorName: application.name,
+            professorEmail: application.email,
+            universityName: application.university,
             yourName: userProfile.yourName,
             yourEmail: userProfile.yourEmail,
             yourDegree: userProfile.yourDegree,
@@ -373,11 +386,38 @@ export default function Home() {
           // Replace basic placeholders even without profile
           const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
           subject = replaceTemplatePlaceholders(subject, {
-            professorName: professor.name,
-            professorEmail: professor.email,
-            universityName: professor.university,
+            professorName: application.name,
+            professorEmail: application.email,
+            universityName: application.university,
           });
         }
+
+        // Fetch application attachments by ID
+        let applicationAttachments: any[] = [];
+        if (application.attachmentIds && application.attachmentIds.length > 0) {
+          try {
+            const attachmentsResponse = await fetch("/api/attachments/batch", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ids: application.attachmentIds }),
+            });
+            if (attachmentsResponse.ok) {
+              applicationAttachments = await attachmentsResponse.json();
+            }
+          } catch (error) {
+            console.warn("Failed to fetch application attachments:", error);
+          }
+        }
+
+        // Merge template attachments with application-specific attachments
+        const allAttachments = [
+          ...(templateAttachments || []),
+          ...applicationAttachments.map(att => ({
+            filename: att.filename,
+            content: att.content,
+            contentType: att.contentType,
+          })),
+        ];
 
         const response = await fetchWithTimeout(
           "/api/email",
@@ -387,9 +427,10 @@ export default function Home() {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              to: professor.email,
+              to: application.email,
               subject,
               text: finalEmailText,
+              attachments: allAttachments.length > 0 ? allAttachments : undefined,
             }),
           },
           30000 // 30 second timeout
@@ -404,26 +445,26 @@ export default function Home() {
         sentCount++;
         successCount++;
         setBulkSendProgress({ total, sent: sentCount, inProgress: true });
-        setProfessors((prev) =>
+        setApplications((prev) =>
           prev.map((p) =>
-            p.id === professor.id
+            p.id === application.id
               ? { ...p, status: "sent" as const, error: undefined }
               : p
           )
         );
-        await updateProfessorStatus(professor.id, "sent");
+        await updateApplicationStatus(application.id, "sent");
       } catch (error: any) {
         // Update status to error (but still count as processed)
         sentCount++;
         setBulkSendProgress({ total, sent: sentCount, inProgress: true });
-        setProfessors((prev) =>
+        setApplications((prev) =>
           prev.map((p) =>
-            p.id === professor.id
+            p.id === application.id
               ? { ...p, status: "error" as const, error: error.message }
               : p
           )
         );
-        await updateProfessorStatus(professor.id, "error", error.message);
+        await updateApplicationStatus(application.id, "error", error.message);
       }
 
       // Small delay between emails
@@ -447,9 +488,9 @@ export default function Home() {
   };
 
 
-  const handleUpdateProfessor = async (
+  const handleUpdateApplication = async (
     id: string,
-    professorData: {
+    applicationData: {
       name: string;
       university: string;
       email: string;
@@ -457,71 +498,70 @@ export default function Home() {
     }
   ) => {
     try {
-      const response = await fetch(`/api/professors/${id}`, {
+      const response = await fetch(`/api/applications/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: professorData.name,
-          university: professorData.university,
-          email: professorData.email,
-          emailText: professorData.baseTemplate,
+          name: applicationData.name,
+          university: applicationData.university,
+          email: applicationData.email,
+          emailText: applicationData.baseTemplate,
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to update professor");
+        throw new Error(error.error || "Failed to update application");
       }
 
-      const updatedProfessor = await response.json();
+      const updatedApplication = await response.json();
       
       // Update in local state
-      const formattedProfessor: Professor = {
-        id: updatedProfessor._id,
-        name: updatedProfessor.name,
-        university: updatedProfessor.university,
-        email: updatedProfessor.email,
-        emailText: updatedProfessor.emailText,
-        status: updatedProfessor.status || "pending",
-        error: updatedProfessor.error,
+      const formattedApplication: Application = {
+        id: updatedApplication._id,
+        name: updatedApplication.name,
+        university: updatedApplication.university,
+        email: updatedApplication.email,
+        emailText: updatedApplication.emailText,
+        status: updatedApplication.status || "pending",
+        error: updatedApplication.error,
+        attachments: updatedApplication.attachments || [],
       };
       
-      setProfessors(
-        professors.map((p) => (p.id === id ? formattedProfessor : p))
+      setApplications(
+        applications.map((p) => (p.id === id ? formattedApplication : p))
       );
     } catch (error: any) {
-      toast.error(`Error updating professor: ${error.message}`);
+      toast.error(`Error updating application: ${error.message}`);
       throw error;
     }
   };
 
   const handleRemove = async (id: string) => {
     try {
-      const response = await fetch(`/api/professors/${id}`, {
+      const response = await fetch(`/api/applications/${id}`, {
         method: "DELETE",
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete professor");
+        throw new Error("Failed to delete application");
       }
 
-      setProfessors(professors.filter((p) => p.id !== id));
-      if (selectedProfessor?.id === id) {
-        setSelectedProfessor(null);
-      }
-      toast.success("Professor removed successfully");
+      setApplications(applications.filter((p) => p.id !== id));
+      toast.success("Application removed successfully");
     } catch (error: any) {
-      toast.error(`Error removing professor: ${error.message}`);
+      toast.error(`Error removing application: ${error.message}`);
     }
   };
 
   if (isLoading) {
     return (
       <main className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-7xl mx-auto flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading professors...</p>
+        <div className="max-w-7xl mx-auto flex flex-col items-center justify-center h-64 gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground font-medium">Loading applications...</p>
         </div>
       </main>
     );
@@ -529,40 +569,32 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-            <div className="mb-8 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
+            <div className="mb-6 md:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h1 className="text-4xl font-bold mb-2">Email Automation</h1>
-                <p className="text-muted-foreground">
-                  Automate personalized emails to professors using AI
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1 md:mb-2">Email Automation</h1>
+                <p className="text-sm sm:text-base text-muted-foreground">
+                  Automate personalized emails using AI
                 </p>
               </div>
-              <div className="flex gap-2">
-                <Link href="/settings/profile">
-                  <Button variant="outline">Profile</Button>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Link href="/applications/new" className="w-full sm:w-auto">
+                  <Button className="w-full sm:w-auto bg-primary hover:bg-primary/90">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Application
+                  </Button>
                 </Link>
-                <Link href="/settings">
-                  <Button variant="outline">Template Settings</Button>
+                <Link href="/settings" className="w-full sm:w-auto">
+                  <Button variant="outline" className="w-full sm:w-auto">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </Button>
                 </Link>
               </div>
             </div>
 
-        <EmailForm
-          onAddProfessor={handleAddProfessor}
-          onCustomizeEmail={handleCustomizeEmail}
-        />
-
-        {selectedProfessor && (
-          <EmailPreview
-            original={selectedProfessor.emailText}
-            customized={selectedProfessor.emailText}
-            professorName={selectedProfessor.name}
-            professorEmail={selectedProfessor.email}
-          />
-        )}
-
-        <ProfessorList
-          professors={professors}
+        <ApplicationList
+          applications={applications}
           onSendEmail={handleSendEmail}
           onBulkSend={handleBulkSend}
           onRemove={handleRemove}

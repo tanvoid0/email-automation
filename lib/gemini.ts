@@ -33,14 +33,15 @@ export async function generateAIResponse(
   const envModel = rawEnvModel?.trim();
   const requestModel = request.model?.trim();
   
-  // Debug logging to see what's actually being read
-  console.log(`[Gemini] Environment check:`, {
-    rawEnvModel: rawEnvModel || '(undefined)',
-    envModel: envModel || '(empty or undefined)',
-    envModelLength: envModel?.length || 0,
-    requestModel: requestModel || '(not provided)',
-    allEnvKeys: Object.keys(process.env).filter(key => key.includes('GEMINI')),
-  });
+  // Debug logging (only in development, without exposing env keys)
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[Gemini] Environment check:`, {
+      rawEnvModel: rawEnvModel || '(undefined)',
+      envModel: envModel || '(empty or undefined)',
+      envModelLength: envModel?.length || 0,
+      requestModel: requestModel || '(not provided)',
+    });
+  }
   
   // Determine model name - no fallback, must be explicitly configured
   let modelName: string;

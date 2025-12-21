@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, CheckCircle2, User, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { FormField } from "@/components/ui/form";
 
@@ -94,8 +94,9 @@ export default function ProfilePage() {
   if (isLoading) {
     return (
       <main className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-4xl mx-auto flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading profile...</p>
+        <div className="max-w-4xl mx-auto flex flex-col items-center justify-center h-64 gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground font-medium">Loading profile...</p>
         </div>
       </main>
     );
@@ -103,17 +104,17 @@ export default function ProfilePage() {
 
   return (
     <main className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Link href="/settings">
-            <Button variant="outline" size="sm">
+      <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+          <Link href="/settings" className="w-full sm:w-auto">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
           </Link>
-          <div>
-            <h1 className="text-3xl font-bold">Personal Profile</h1>
-            <p className="text-muted-foreground">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold">Personal Profile</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
               Manage your personal information used in email templates
             </p>
           </div>
@@ -121,7 +122,10 @@ export default function ProfilePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Your Information</CardTitle>
+            <div className="flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              <CardTitle>Your Information</CardTitle>
+            </div>
             <CardDescription>
               This information will be used to replace placeholders in email templates.
               Your personal data is kept private and not shared with AI during customization.
@@ -187,9 +191,18 @@ export default function ProfilePage() {
                 </ul>
               </div>
               <div className="flex gap-2">
-                <Button type="submit" disabled={isSaving}>
-                  <Save className="h-4 w-4 mr-2" />
-                  {isSaving ? "Saving..." : "Save Profile"}
+                <Button type="submit" disabled={isSaving} className="w-full sm:w-auto bg-primary hover:bg-primary/90">
+                  {isSaving ? (
+                    <>
+                      <Save className="h-4 w-4 mr-2 animate-pulse" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Save Profile
+                    </>
+                  )}
                 </Button>
               </div>
             </form>

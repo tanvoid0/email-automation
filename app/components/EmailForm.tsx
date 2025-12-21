@@ -9,18 +9,23 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { professorSchema, type ProfessorFormData } from "@/lib/validations/professor";
+import { applicationSchema, type ApplicationFormData } from "@/lib/validations/application";
 import { FormField } from "@/components/ui/form";
 import { replaceTemplatePlaceholders } from "@/lib/utils/template";
 import { DEFAULT_EMAIL_TEMPLATE } from "@/lib/constants/emailTemplate";
 import { EmailDiff } from "./EmailDiff";
+import { FileAttachments } from "./FileAttachments";
+import { Attachment } from "@/lib/utils/attachments";
+import { useTemplate } from "@/lib/hooks/useTemplate";
+import { Sparkles, Plus, Wand2 } from "lucide-react";
 
 interface EmailFormProps {
-  onAddProfessor: (professor: {
+  onAddApplication: (application: {
     name: string;
     university: string;
     email: string;
     baseTemplate: string;
+    attachments?: Attachment[];
   }) => void;
   onCustomizeEmail: (
     baseTemplate: string,
@@ -30,13 +35,16 @@ interface EmailFormProps {
 }
 
 export function EmailForm({ 
-  onAddProfessor, 
+  onAddApplication, 
   onCustomizeEmail,
 }: EmailFormProps) {
   const [isCustomizing, setIsCustomizing] = useState(false);
   const [customizedEmail, setCustomizedEmail] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingTemplate, setIsLoadingTemplate] = useState(true);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+
+  // Use the reusable template hook
+  const { templateData, isLoading: isLoadingTemplate, reloadTemplate } = useTemplate();
 
   const {
     register,
@@ -45,8 +53,8 @@ export function EmailForm({
     watch,
     setValue,
     reset,
-  } = useForm<ProfessorFormData>({
-    resolver: zodResolver(professorSchema),
+  } = useForm<ApplicationFormData>({
+    resolver: zodResolver(applicationSchema) as any,
     defaultValues: {
       name: "",
       university: "",
@@ -55,31 +63,13 @@ export function EmailForm({
     },
   });
 
-  // Load template from API on mount (DB is single source of truth, constant is fallback)
+  // Update form when template loads
   useEffect(() => {
-    const loadTemplate = async () => {
-      try {
-        setIsLoadingTemplate(true);
-        const response = await fetch("/api/template");
-        if (response.ok) {
-          const data = await response.json();
-          setValue("emailText", data.content);
-        } else {
-          // Fallback to constant only if API fails
-          console.warn("Failed to load template from DB, using fallback");
-          setValue("emailText", DEFAULT_EMAIL_TEMPLATE);
-        }
-      } catch (error: any) {
-        console.error("Error loading template:", error);
-        // Fallback to constant only if API fails
-        setValue("emailText", DEFAULT_EMAIL_TEMPLATE);
-      } finally {
-        setIsLoadingTemplate(false);
-      }
-    };
-
-    loadTemplate();
-  }, [setValue]);
+    if (!isLoadingTemplate && templateData.content) {
+      setValue("emailText", templateData.content);
+      setAttachments(templateData.attachments);
+    }
+  }, [isLoadingTemplate, templateData, setValue]);
 
   const emailText = watch("emailText");
   const professorName = watch("name");
@@ -164,7 +154,7 @@ export function EmailForm({
     }
   };
 
-  const onSubmit = async (data: ProfessorFormData) => {
+  const onSubmit = async (data: ApplicationFormData) => {
     setIsSubmitting(true);
     try {
       // Load user profile for personal info placeholders
@@ -195,18 +185,23 @@ export function EmailForm({
         });
       }
 
-      // Add new professor
-      onAddProfessor({
+      // Add new application
+      onAddApplication({
         name: data.name,
         university: data.university,
         email: data.email,
         baseTemplate: finalEmailText,
+        attachments: attachments.length > 0 ? attachments : undefined,
       });
 
       // Reset form
       reset();
       setCustomizedEmail(null);
-      toast.success("Professor added successfully!");
+      
+      // Reload template data after reset - the useEffect will handle updating the form
+      await reloadTemplate();
+      
+      toast.success("Application added successfully!");
     } catch (error: any) {
       toast.error(`Error adding professor: ${error.message}`);
     } finally {
@@ -217,15 +212,15 @@ export function EmailForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Add Professor</CardTitle>
-        <CardDescription>
-          Enter professor details. AI customization is optional - you can add directly or customize first.
-        </CardDescription>
+            <CardTitle>Add Application</CardTitle>
+            <CardDescription>
+              Enter application details. AI customization is optional - you can add directly or customize first.
+            </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField label="Professor Name" error={errors.name?.message}>
+            <FormField label="Recipient Name" error={errors.name?.message}>
               <Input
                 placeholder="e.g., Weifeng He"
                 {...register("name")}
@@ -240,7 +235,7 @@ export function EmailForm({
               />
             </FormField>
           </div>
-          <FormField label="Professor Email" error={errors.email?.message}>
+          <FormField label="Recipient Email" error={errors.email?.message}>
             <Input
               type="email"
               placeholder="e.g., hewf@sjtu.edu.cn"
@@ -255,12 +250,22 @@ export function EmailForm({
               className={`font-mono text-sm ${errors.emailText ? "border-destructive" : ""}`}
             />
           </FormField>
-          <div className="flex gap-2 flex-wrap">
+          <div className="space-y-2">
+            <Label>Attachments (Optional)</Label>
+            <p className="text-xs text-muted-foreground">
+              Template attachments are automatically included. You can add additional files specific to this application.
+            </p>
+            <FileAttachments
+              attachments={attachments}
+              onAttachmentsChange={setAttachments}
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
             <Button
               type="button"
               onClick={fillMockData}
               variant="outline"
-              className="text-xs"
+              className="text-xs w-full sm:w-auto border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300"
             >
               Fill Mock Data
             </Button>
@@ -269,15 +274,37 @@ export function EmailForm({
               onClick={handleCustomize}
               disabled={isCustomizing || !professorName || !universityName}
               variant="outline"
+              className="w-full sm:w-auto border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:hover:bg-purple-950/30"
             >
-              {isCustomizing ? "Customizing..." : "Customize with AI (Optional)"}
+              {isCustomizing ? (
+                <>
+                  <Wand2 className="h-4 w-4 mr-2 animate-spin" />
+                  Customizing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Customize with AI (Optional)
+                </>
+              )}
             </Button>
             <Button 
               type="submit"
               variant="default"
               disabled={isSubmitting}
+              className="w-full sm:w-auto bg-primary hover:bg-primary/90"
             >
-              {isSubmitting ? "Adding..." : "Add to List"}
+              {isSubmitting ? (
+                <>
+                  <Plus className="h-4 w-4 mr-2 animate-pulse" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add to List
+                </>
+              )}
             </Button>
           </div>
           {customizedEmail && emailText && (

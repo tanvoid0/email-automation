@@ -10,15 +10,14 @@ export async function GET() {
     await connectDB();
     let profile = await UserProfileModel.findOne({ name: "default" });
     
+    // Return empty profile if it doesn't exist (no defaults)
     if (!profile) {
-      // Create default profile if it doesn't exist
-      profile = await UserProfileModel.create({
-        name: "default",
-        yourName: "Nafisa Mubassira",
-        yourEmail: "228801027@stu.yzu.edu.cn",
-        yourDegree: "B.Sc. in Microelectronics Science and Engineering",
-        yourUniversity: "Yangzhou University",
-        yourGPA: "4.30/5.00",
+      return NextResponse.json({
+        yourName: "",
+        yourEmail: "",
+        yourDegree: "",
+        yourUniversity: "",
+        yourGPA: "",
       });
     }
 

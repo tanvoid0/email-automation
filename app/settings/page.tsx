@@ -9,8 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Save, Sparkles, Mail } from "lucide-react";
+import { ArrowLeft, Save, Sparkles, Mail, User, FileText, Wand2, CheckCircle2, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { FormField } from "@/components/ui/form";
+import { FileAttachments } from "@/app/components/FileAttachments";
+import { Attachment } from "@/lib/utils/attachments";
+import { useTemplate } from "@/lib/hooks/useTemplate";
 
 interface TemplateFormData {
   content: string;
@@ -18,23 +22,29 @@ interface TemplateFormData {
   subject?: string;
 }
 
+interface ProfileFormData {
+  yourName: string;
+  yourEmail: string;
+  yourDegree?: string;
+  yourUniversity?: string;
+  yourGPA?: string;
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isCustomizing, setIsCustomizing] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [customizationPrompt, setCustomizationPrompt] = useState("");
   const [showCustomizationInput, setShowCustomizationInput] = useState(false);
+  const [templateAttachments, setTemplateAttachments] = useState<Attachment[]>([]);
+  
+  // Use the reusable template hook
+  const { templateData, isLoading: isLoadingTemplate, reloadTemplate } = useTemplate();
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-    watch,
-    setValue,
-  } = useForm<TemplateFormData>({
+  const templateForm = useForm<TemplateFormData>({
     defaultValues: {
       content: "",
       description: "",
@@ -42,32 +52,55 @@ export default function SettingsPage() {
     },
   });
 
-  const templateContent = watch("content");
+  const profileForm = useForm<ProfileFormData>({
+    defaultValues: {
+      yourName: "",
+      yourEmail: "",
+      yourDegree: "",
+      yourUniversity: "",
+      yourGPA: "",
+    },
+  });
+
+  const templateContent = templateForm.watch("content");
 
   useEffect(() => {
-    const loadTemplate = async () => {
+    const loadProfile = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch("/api/template");
-        if (response.ok) {
-          const data = await response.json();
-          reset({
-            content: data.content,
-            description: data.description || "",
-            subject: data.subject || "",
+        
+        // Template is loaded by useTemplate hook, update form when it's ready
+        if (!isLoadingTemplate && templateData.content) {
+          templateForm.reset({
+            content: templateData.content,
+            description: templateData.description || "",
+            subject: templateData.subject || "",
           });
-        } else {
-          throw new Error("Failed to load template");
+          // Sync attachments state with template data
+          setTemplateAttachments(templateData.attachments);
+        }
+
+        // Load profile
+        const profileResponse = await fetch("/api/profile");
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          profileForm.reset({
+            yourName: profileData.yourName || "",
+            yourEmail: profileData.yourEmail || "",
+            yourDegree: profileData.yourDegree || "",
+            yourUniversity: profileData.yourUniversity || "",
+            yourGPA: profileData.yourGPA || "",
+          });
         }
       } catch (error: any) {
-        toast.error(`Error loading template: ${error.message}`);
+        toast.error(`Error loading settings: ${error.message}`);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadTemplate();
-  }, [reset]);
+    loadProfile();
+  }, [templateForm, profileForm, isLoadingTemplate, templateData]);
 
   const handleCustomize = async () => {
     if (!templateContent) {
@@ -94,7 +127,7 @@ export default function SettingsPage() {
       }
 
       const data = await response.json();
-      setValue("content", data.customizedText);
+      templateForm.setValue("content", data.customizedText);
       setCustomizationPrompt("");
       setShowCustomizationInput(false);
       toast.success("Template customized successfully!");
@@ -130,39 +163,88 @@ export default function SettingsPage() {
     }
   };
 
-  const onSubmit = async (data: TemplateFormData) => {
-    setIsSaving(true);
+  const onTemplateSubmit = async (data: TemplateFormData) => {
+    setIsSavingTemplate(true);
     try {
+      const payload = {
+        content: data.content,
+        description: data.description,
+        subject: data.subject,
+        attachments: templateAttachments,
+      };
+      
+      console.log("[Settings] Saving template with attachments:", {
+        attachmentsCount: templateAttachments.length,
+        attachments: templateAttachments,
+      });
+
       const response = await fetch("/api/template", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          content: data.content,
-          description: data.description,
-          subject: data.subject,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const error = await response.json();
+        console.error("[Settings] Failed to save template:", error);
         throw new Error(error.error || "Failed to save template");
+      }
+
+      const savedData = await response.json();
+      console.log("[Settings] Template saved successfully:", {
+        hasAttachments: !!savedData.attachments,
+        attachmentsType: typeof savedData.attachments,
+        attachmentsLength: savedData.attachments?.length || 0,
+        attachments: savedData.attachments,
+      });
+
+      // Reload template data to ensure consistency
+      await reloadTemplate();
+      // Update local attachments state with saved data
+      if (savedData.attachments) {
+        setTemplateAttachments(savedData.attachments);
       }
 
       toast.success("Email template saved successfully!");
     } catch (error: any) {
       toast.error(`Error saving template: ${error.message}`);
     } finally {
-      setIsSaving(false);
+      setIsSavingTemplate(false);
+    }
+  };
+
+  const onProfileSubmit = async (data: ProfileFormData) => {
+    setIsSavingProfile(true);
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to save profile");
+      }
+
+      toast.success("Profile saved successfully!");
+    } catch (error: any) {
+      toast.error(`Error saving profile: ${error.message}`);
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
   if (isLoading) {
     return (
       <main className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-4xl mx-auto flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading template...</p>
+        <div className="max-w-4xl mx-auto flex flex-col items-center justify-center h-64 gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground font-medium">Loading settings...</p>
         </div>
       </main>
     );
@@ -170,32 +252,120 @@ export default function SettingsPage() {
 
   return (
     <main className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold">Email Template Settings</h1>
-              <p className="text-muted-foreground">
-                Customize the default email template used for new professors
-              </p>
-            </div>
-          </div>
-          <Link href="/settings/profile">
-            <Button variant="outline">Personal Profile</Button>
+      <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+          <Link href="/" className="w-full sm:w-auto">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
           </Link>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold">Settings</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              Manage your email template and personal profile
+            </p>
+          </div>
         </div>
 
+        {/* Personal Profile Section */}
         <Card>
           <CardHeader>
-            <CardTitle>Email Template</CardTitle>
+            <div className="flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              <CardTitle>Personal Profile</CardTitle>
+            </div>
             <CardDescription>
-              Use placeholders: [PROFESSOR_NAME], [PROFESSOR_EMAIL], [UNIVERSITY_NAME]
+              Your personal information used to replace placeholders in email templates. Your data is kept private and not shared with AI.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField label="Your Name" error={profileForm.formState.errors.yourName?.message}>
+                  <Input
+                    placeholder="Enter your name"
+                    {...profileForm.register("yourName", {
+                      required: "Your name is required",
+                    })}
+                    className={profileForm.formState.errors.yourName ? "border-destructive" : ""}
+                  />
+                </FormField>
+                <FormField label="Your Email" error={profileForm.formState.errors.yourEmail?.message}>
+                  <Input
+                    type="email"
+                    placeholder="Enter your email address"
+                    {...profileForm.register("yourEmail", {
+                      required: "Your email is required",
+                      pattern: {
+                        value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                        message: "Please enter a valid email address",
+                      },
+                    })}
+                    className={profileForm.formState.errors.yourEmail ? "border-destructive" : ""}
+                  />
+                </FormField>
+              </div>
+              <FormField label="Your Degree" error={profileForm.formState.errors.yourDegree?.message}>
+                <Input
+                  placeholder="Enter your degree (optional)"
+                  {...profileForm.register("yourDegree")}
+                  className={profileForm.formState.errors.yourDegree ? "border-destructive" : ""}
+                />
+              </FormField>
+              <FormField label="Your University" error={profileForm.formState.errors.yourUniversity?.message}>
+                <Input
+                  placeholder="Enter your university (optional)"
+                  {...profileForm.register("yourUniversity")}
+                  className={profileForm.formState.errors.yourUniversity ? "border-destructive" : ""}
+                />
+              </FormField>
+              <FormField label="Your GPA" error={profileForm.formState.errors.yourGPA?.message}>
+                <Input
+                  placeholder="Enter your GPA (optional)"
+                  {...profileForm.register("yourGPA")}
+                  className={profileForm.formState.errors.yourGPA ? "border-destructive" : ""}
+                />
+              </FormField>
+              <div className="bg-muted p-4 rounded-md">
+                <Label className="text-sm font-semibold mb-2 block">
+                  How This Works:
+                </Label>
+                <ul className="text-sm space-y-1 text-muted-foreground">
+                  <li>• Your information is stored securely in the database</li>
+                  <li>• Placeholders like [YOUR_NAME], [YOUR_EMAIL] in templates are replaced with this data</li>
+                  <li>• Your personal data is never sent to AI during template customization</li>
+                  <li>• Only placeholders are shared with AI, keeping your privacy protected</li>
+                </ul>
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={isSavingProfile} className="w-full sm:w-auto bg-primary hover:bg-primary/90">
+                  {isSavingProfile ? (
+                    <>
+                      <Save className="h-4 w-4 mr-2 animate-pulse" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Save Profile
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Email Template Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              <CardTitle>Email Template</CardTitle>
+            </div>
+            <CardDescription>
+              Use placeholders: [PROFESSOR_NAME], [PROFESSOR_EMAIL], [UNIVERSITY_NAME] (for recipient info)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -218,13 +388,13 @@ export default function SettingsPage() {
                 </ol>
               </div>
             </div>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={templateForm.handleSubmit(onTemplateSubmit)} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="description">Description (Optional)</Label>
                 <Input
                   id="description"
-                  placeholder="e.g., Default template for professor outreach"
-                  {...register("description")}
+                  placeholder="e.g., Default email template"
+                  {...templateForm.register("description")}
                 />
               </div>
               <div className="space-y-2">
@@ -232,10 +402,10 @@ export default function SettingsPage() {
                 <Input
                   id="subject"
                   placeholder="Request for Admission Acceptance Letter for Master's Program"
-                  {...register("subject")}
+                  {...templateForm.register("subject")}
                 />
                 <p className="text-xs text-muted-foreground">
-                  The subject line for emails sent to professors. You can use placeholders like [PROFESSOR_NAME].
+                  The subject line for emails. You can use placeholders like [PROFESSOR_NAME].
                 </p>
               </div>
               <div className="space-y-2">
@@ -243,7 +413,7 @@ export default function SettingsPage() {
                 <Textarea
                   id="content"
                   rows={20}
-                  {...register("content", {
+                  {...templateForm.register("content", {
                     required: "Email template content is required",
                     minLength: {
                       value: 10,
@@ -253,23 +423,40 @@ export default function SettingsPage() {
                   className="font-mono text-sm"
                   placeholder="Enter your email template here..."
                 />
-                {errors.content && (
-                  <p className="text-sm text-destructive">{errors.content.message}</p>
+                {templateForm.formState.errors.content && (
+                  <p className="text-sm text-destructive">{templateForm.formState.errors.content.message}</p>
                 )}
+              </div>
+              <div className="space-y-2">
+                <Label>Email Attachments (Optional)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Files attached here will be included with all emails.
+                </p>
+                <FileAttachments
+                  attachments={templateAttachments}
+                  onAttachmentsChange={(newAttachments) => {
+                    console.log("[Settings] Attachments changed:", {
+                      oldCount: templateAttachments.length,
+                      newCount: newAttachments.length,
+                      newAttachments: newAttachments,
+                    });
+                    setTemplateAttachments(newAttachments);
+                  }}
+                />
               </div>
               <div className="bg-muted p-4 rounded-md">
                 <Label className="text-sm font-semibold mb-2 block">
                   Available Placeholders:
                 </Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <p className="text-xs font-semibold mb-1 text-foreground">Professor Info:</p>
+                    <p className="text-xs font-semibold mb-1 text-foreground">Recipient Info:</p>
                     <ul className="text-sm space-y-1 text-muted-foreground">
                       <li>
-                        <code className="bg-background px-2 py-1 rounded">[PROFESSOR_NAME]</code> - Professor's name
+                        <code className="bg-background px-2 py-1 rounded">[PROFESSOR_NAME]</code> - Recipient's name
                       </li>
                       <li>
-                        <code className="bg-background px-2 py-1 rounded">[PROFESSOR_EMAIL]</code> - Professor's email
+                        <code className="bg-background px-2 py-1 rounded">[PROFESSOR_EMAIL]</code> - Recipient's email
                       </li>
                       <li>
                         <code className="bg-background px-2 py-1 rounded">[UNIVERSITY_NAME]</code> - University name
@@ -302,12 +489,13 @@ export default function SettingsPage() {
                 </p>
               </div>
               <div className="space-y-3">
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
                   <Button
                     type="button"
                     onClick={() => setShowCustomizationInput(!showCustomizationInput)}
                     variant="outline"
                     disabled={isCustomizing || !templateContent}
+                    className="w-full sm:w-auto border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:hover:bg-purple-950/30"
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
                     {showCustomizationInput ? "Cancel AI Customization" : "Customize with AI"}
@@ -317,9 +505,19 @@ export default function SettingsPage() {
                       type="button"
                       onClick={handleCustomize}
                       disabled={isCustomizing || !templateContent}
-                      variant="default"
+                      className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white"
                     >
-                      {isCustomizing ? "Customizing..." : "Apply AI Customization"}
+                      {isCustomizing ? (
+                        <>
+                          <Wand2 className="h-4 w-4 mr-2 animate-spin" />
+                          Customizing...
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="h-4 w-4 mr-2" />
+                          Apply AI Customization
+                        </>
+                      )}
                     </Button>
                   )}
                   <Button
@@ -327,13 +525,30 @@ export default function SettingsPage() {
                     onClick={handleTestEmail}
                     disabled={isTestingEmail}
                     variant="outline"
+                    className="w-full sm:w-auto border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
                   >
                     <Mail className="h-4 w-4 mr-2" />
-                    {isTestingEmail ? "Sending Test Email..." : "Test Email Configuration"}
+                    {isTestingEmail ? (
+                      <>
+                        <Mail className="h-4 w-4 mr-2 animate-pulse" />
+                        Sending Test Email...
+                      </>
+                    ) : (
+                      "Test Email Configuration"
+                    )}
                   </Button>
-                  <Button type="submit" disabled={isSaving}>
-                    <Save className="h-4 w-4 mr-2" />
-                    {isSaving ? "Saving..." : "Save Template"}
+                  <Button type="submit" disabled={isSavingTemplate} className="w-full sm:w-auto bg-primary hover:bg-primary/90">
+                    {isSavingTemplate ? (
+                      <>
+                        <Save className="h-4 w-4 mr-2 animate-pulse" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Save Template
+                      </>
+                    )}
                   </Button>
                 </div>
                 {showCustomizationInput && (
@@ -362,4 +577,3 @@ export default function SettingsPage() {
     </main>
   );
 }
-
