@@ -22,13 +22,9 @@ interface TemplateFormData {
   subject?: string;
 }
 
-interface ProfileFormData {
-  yourName: string;
-  yourEmail: string;
-  yourDegree?: string;
-  yourUniversity?: string;
-  yourGPA?: string;
-}
+import type { UserProfileFormData } from "@/lib/types/userProfile";
+
+type ProfileFormData = UserProfileFormData;
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -54,11 +50,11 @@ export default function SettingsPage() {
 
   const profileForm = useForm<ProfileFormData>({
     defaultValues: {
-      yourName: "",
-      yourEmail: "",
-      yourDegree: "",
-      yourUniversity: "",
-      yourGPA: "",
+      fullName: "",
+      email: "",
+      degree: "",
+      university: "",
+      gpa: "",
     },
   });
 
@@ -85,15 +81,16 @@ export default function SettingsPage() {
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
           profileForm.reset({
-            yourName: profileData.yourName || "",
-            yourEmail: profileData.yourEmail || "",
-            yourDegree: profileData.yourDegree || "",
-            yourUniversity: profileData.yourUniversity || "",
-            yourGPA: profileData.yourGPA || "",
+            fullName: profileData.fullName || "",
+            email: profileData.email || "",
+            degree: profileData.degree || "",
+            university: profileData.university || "",
+            gpa: profileData.gpa || "",
           });
         }
-      } catch (error: any) {
-        toast.error(`Error loading settings: ${error.message}`);
+      } catch (error) {
+        const err = error as Error;
+        toast.error(`Error loading settings: ${err.message}`);
       } finally {
         setIsLoading(false);
       }
@@ -282,49 +279,49 @@ export default function SettingsPage() {
           <CardContent>
             <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label="Your Name" error={profileForm.formState.errors.yourName?.message}>
+                <FormField label="Your Name" error={profileForm.formState.errors.fullName?.message}>
                   <Input
                     placeholder="Enter your name"
-                    {...profileForm.register("yourName", {
+                    {...profileForm.register("fullName", {
                       required: "Your name is required",
                     })}
-                    className={profileForm.formState.errors.yourName ? "border-destructive" : ""}
+                    className={profileForm.formState.errors.fullName ? "border-destructive" : ""}
                   />
                 </FormField>
-                <FormField label="Your Email" error={profileForm.formState.errors.yourEmail?.message}>
+                <FormField label="Your Email" error={profileForm.formState.errors.email?.message}>
                   <Input
                     type="email"
                     placeholder="Enter your email address"
-                    {...profileForm.register("yourEmail", {
+                    {...profileForm.register("email", {
                       required: "Your email is required",
                       pattern: {
                         value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
                         message: "Please enter a valid email address",
                       },
                     })}
-                    className={profileForm.formState.errors.yourEmail ? "border-destructive" : ""}
+                    className={profileForm.formState.errors.email ? "border-destructive" : ""}
                   />
                 </FormField>
               </div>
-              <FormField label="Your Degree" error={profileForm.formState.errors.yourDegree?.message}>
+              <FormField label="Your Degree" error={profileForm.formState.errors.degree?.message}>
                 <Input
                   placeholder="Enter your degree (optional)"
-                  {...profileForm.register("yourDegree")}
-                  className={profileForm.formState.errors.yourDegree ? "border-destructive" : ""}
+                  {...profileForm.register("degree")}
+                  className={profileForm.formState.errors.degree ? "border-destructive" : ""}
                 />
               </FormField>
-              <FormField label="Your University" error={profileForm.formState.errors.yourUniversity?.message}>
+              <FormField label="Your University" error={profileForm.formState.errors.university?.message}>
                 <Input
                   placeholder="Enter your university (optional)"
-                  {...profileForm.register("yourUniversity")}
-                  className={profileForm.formState.errors.yourUniversity ? "border-destructive" : ""}
+                  {...profileForm.register("university")}
+                  className={profileForm.formState.errors.university ? "border-destructive" : ""}
                 />
               </FormField>
-              <FormField label="Your GPA" error={profileForm.formState.errors.yourGPA?.message}>
+              <FormField label="Your GPA" error={profileForm.formState.errors.gpa?.message}>
                 <Input
                   placeholder="Enter your GPA (optional)"
-                  {...profileForm.register("yourGPA")}
-                  className={profileForm.formState.errors.yourGPA ? "border-destructive" : ""}
+                  {...profileForm.register("gpa")}
+                  className={profileForm.formState.errors.gpa ? "border-destructive" : ""}
                 />
               </FormField>
               <div className="bg-muted p-4 rounded-md">
@@ -333,7 +330,7 @@ export default function SettingsPage() {
                 </Label>
                 <ul className="text-sm space-y-1 text-muted-foreground">
                   <li>• Your information is stored securely in the database</li>
-                  <li>• Placeholders like [YOUR_NAME], [YOUR_EMAIL] in templates are replaced with this data</li>
+                  <li>• Personal information placeholders in templates are replaced with your profile data</li>
                   <li>• Your personal data is never sent to AI during template customization</li>
                   <li>• Only placeholders are shared with AI, keeping your privacy protected</li>
                 </ul>
@@ -365,7 +362,7 @@ export default function SettingsPage() {
               <CardTitle>Email Template</CardTitle>
             </div>
             <CardDescription>
-              Use placeholders: [PROFESSOR_NAME], [PROFESSOR_EMAIL], [UNIVERSITY_NAME] (for recipient info)
+              Use placeholders for recipient information (e.g., [PROFESSOR_NAME], [PROFESSOR_EMAIL], [UNIVERSITY_NAME])
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -405,7 +402,7 @@ export default function SettingsPage() {
                   {...templateForm.register("subject")}
                 />
                 <p className="text-xs text-muted-foreground">
-                  The subject line for emails. You can use placeholders like [PROFESSOR_NAME].
+                  The subject line for emails. You can use placeholders for recipient information.
                 </p>
               </div>
               <div className="space-y-2">

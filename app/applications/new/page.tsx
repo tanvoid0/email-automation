@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { EmailForm } from "@/app/components/EmailForm";
 import { ArrowLeft } from "lucide-react";
+import type { UserProfileData } from "@/lib/types/userProfile";
 
 export default function NewApplicationPage() {
   const router = useRouter();
@@ -52,30 +53,68 @@ export default function NewApplicationPage() {
     }>;
   }) => {
     try {
+      // Validate required fields
+      if (!applicationData.name || !applicationData.university || !applicationData.email || !applicationData.baseTemplate) {
+        throw new Error("Missing required fields: name, university, email, and emailText are required");
+      }
+
+      const requestBody = {
+        name: applicationData.name.trim(),
+        university: applicationData.university.trim(),
+        email: applicationData.email.trim(),
+        emailText: applicationData.baseTemplate.trim(),
+        attachments: applicationData.attachments || [],
+      };
+
+      // Validate emailText length (must be at least 10 characters per schema)
+      if (requestBody.emailText.length < 10) {
+        throw new Error("Email text must be at least 10 characters long");
+      }
+
       const response = await fetch("/api/applications", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          name: applicationData.name,
-          university: applicationData.university,
-          email: applicationData.email,
-          emailText: applicationData.baseTemplate,
-          attachments: applicationData.attachments || [],
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to add application");
+        const errorMessage = error.details 
+          ? `Validation failed: ${JSON.stringify(error.details)}`
+          : error.error || "Failed to add application";
+        
+        // Check if it's a validation error that might be related to missing profile
+        if (errorMessage.includes("required") || errorMessage.includes("missing")) {
+          throw new Error("PROFILE_REQUIRED");
+        }
+        
+        throw new Error(errorMessage);
       }
 
       toast.success("Application added successfully!");
       // Redirect to home page after successful addition
       router.push("/");
-    } catch (error: any) {
-      toast.error(`Error adding application: ${error.message}`);
+    } catch (error) {
+      const err = error as Error;
+      
+      // Check if error is related to missing user profile
+      if (err.message === "PROFILE_REQUIRED" || err.message.includes("profile") || err.message.includes("user") || err.message.includes("required")) {
+        toast.error("User profile required", {
+          description: "Please set up your personal information (name and email) in settings before creating applications. This information is used to personalize your emails and replace placeholders like [YOUR_NAME] and [YOUR_EMAIL].",
+          action: {
+            label: "Go to Settings",
+            onClick: () => router.push("/settings"),
+          },
+          duration: 10000,
+        });
+      } else {
+        toast.error(`Error adding application: ${err.message}`, {
+          description: "Please check that all required fields are filled correctly.",
+          duration: 5000,
+        });
+      }
       throw error;
     }
   };

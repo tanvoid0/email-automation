@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -18,6 +19,7 @@ import { FileAttachments } from "./FileAttachments";
 import { Attachment } from "@/lib/utils/attachments";
 import { useTemplate } from "@/lib/hooks/useTemplate";
 import { Sparkles, Plus, Wand2 } from "lucide-react";
+import type { UserProfileData } from "@/lib/types/userProfile";
 
 interface EmailFormProps {
   onAddApplication: (application: {
@@ -38,6 +40,7 @@ export function EmailForm({
   onAddApplication, 
   onCustomizeEmail,
 }: EmailFormProps) {
+  const router = useRouter();
   const [isCustomizing, setIsCustomizing] = useState(false);
   const [customizedEmail, setCustomizedEmail] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,12 +57,14 @@ export function EmailForm({
     setValue,
     reset,
   } = useForm<ApplicationFormData>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(applicationSchema) as any,
     defaultValues: {
       name: "",
       university: "",
       email: "",
       emailText: DEFAULT_EMAIL_TEMPLATE,
+      attachments: [],
     },
   });
 
@@ -157,8 +162,15 @@ export function EmailForm({
   const onSubmit = async (data: ApplicationFormData) => {
     setIsSubmitting(true);
     try {
+      // Validate required fields before proceeding
+      if (!data.name || !data.university || !data.email || !data.emailText) {
+        toast.error("Please fill in all required fields");
+        setIsSubmitting(false);
+        return;
+      }
+
       // Load user profile for personal info placeholders
-      let userProfile = null;
+      let userProfile: UserProfileData | null = null;
       try {
         const profileResponse = await fetch("/api/profile");
         if (profileResponse.ok) {
@@ -168,8 +180,29 @@ export function EmailForm({
         console.warn("Failed to load user profile, using template as-is");
       }
 
+      // Check if user profile is missing or incomplete
+      if (!userProfile || !userProfile.fullName || !userProfile.email) {
+        toast.error("User profile is required", {
+          description: "Please set up your personal information (name and email) in settings before creating applications. This information is used to personalize your emails.",
+          action: {
+            label: "Go to Settings",
+            onClick: () => router.push("/settings"),
+          },
+          duration: 10000, // Show for 10 seconds
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
       // Use customized email if available, otherwise use base template with placeholders replaced
       let finalEmailText = customizedEmail || data.emailText;
+      
+      // Ensure we have email text
+      if (!finalEmailText || finalEmailText.trim().length < 10) {
+        toast.error("Email text is required and must be at least 10 characters");
+        setIsSubmitting(false);
+        return;
+      }
       
       // If no customization was done, replace placeholders with actual values
       if (!customizedEmail) {
@@ -177,20 +210,20 @@ export function EmailForm({
           professorName: data.name,
           professorEmail: data.email,
           universityName: data.university,
-          yourName: userProfile?.yourName,
-          yourEmail: userProfile?.yourEmail,
-          yourDegree: userProfile?.yourDegree,
-          yourUniversity: userProfile?.yourUniversity,
-          yourGPA: userProfile?.yourGPA,
+          fullName: userProfile?.fullName,
+          email: userProfile?.email,
+          degree: userProfile?.degree,
+          university: userProfile?.university,
+          gpa: userProfile?.gpa,
         });
       }
 
       // Add new application
       onAddApplication({
-        name: data.name,
-        university: data.university,
-        email: data.email,
-        baseTemplate: finalEmailText,
+        name: data.name.trim(),
+        university: data.university.trim(),
+        email: data.email.trim(),
+        baseTemplate: finalEmailText.trim(),
         attachments: attachments.length > 0 ? attachments : undefined,
       });
 
@@ -202,8 +235,9 @@ export function EmailForm({
       await reloadTemplate();
       
       toast.success("Application added successfully!");
-    } catch (error: any) {
-      toast.error(`Error adding professor: ${error.message}`);
+      } catch (error) {
+        const err = error as Error;
+        toast.error(`Error adding professor: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }

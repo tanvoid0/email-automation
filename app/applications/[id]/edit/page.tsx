@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { applicationSchema, type ApplicationFormData } from "@/lib/validations/application";
 import { FormField } from "@/components/ui/form";
 import { ArrowLeft, Loader2, Sparkles, Save, Wand2 } from "lucide-react";
+import type { UserProfileData } from "@/lib/types/userProfile";
 import Link from "next/link";
 import { replaceTemplatePlaceholders } from "@/lib/utils/template";
 import { DEFAULT_EMAIL_TEMPLATE } from "@/lib/constants/emailTemplate";
@@ -49,6 +50,7 @@ export default function EditApplicationPage() {
     setValue,
     reset,
   } = useForm<ApplicationFormData>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(applicationSchema) as any,
     defaultValues: {
       name: "",
@@ -89,7 +91,7 @@ export default function EditApplicationPage() {
             });
             if (attachmentsResponse.ok) {
               const attachmentsData = await attachmentsResponse.json();
-              setAttachments(attachmentsData.map((att: any) => ({
+              setAttachments(attachmentsData.map((att: { filename: string; content: string; contentType?: string }) => ({
                 filename: att.filename,
                 content: att.content,
                 contentType: att.contentType,
@@ -102,8 +104,9 @@ export default function EditApplicationPage() {
         } else {
           setAttachments([]);
         }
-      } catch (error: any) {
-        toast.error(`Error loading application: ${error.message}`);
+      } catch (error) {
+        const err = error as Error;
+        toast.error(`Error loading application: ${err.message}`);
         router.push("/");
       } finally {
         setIsLoading(false);
@@ -154,7 +157,7 @@ export default function EditApplicationPage() {
     setIsSubmitting(true);
     try {
       // Load user profile for personal info placeholders
-      let userProfile = null;
+      let userProfile: UserProfileData | null = null;
       try {
         const profileResponse = await fetch("/api/profile");
         if (profileResponse.ok) {
@@ -162,6 +165,20 @@ export default function EditApplicationPage() {
         }
       } catch (error) {
         console.warn("Failed to load user profile, using template as-is");
+      }
+
+      // Check if user profile is missing or incomplete
+      if (!userProfile || !userProfile.fullName || !userProfile.email) {
+        toast.error("User profile is required", {
+          description: "Please set up your personal information (name and email) in settings before updating applications. This information is used to personalize your emails.",
+          action: {
+            label: "Go to Settings",
+            onClick: () => router.push("/settings"),
+          },
+          duration: 10000,
+        });
+        setIsSubmitting(false);
+        return;
       }
 
       // Use customized email if available, otherwise use base template with placeholders replaced
@@ -173,11 +190,11 @@ export default function EditApplicationPage() {
           professorName: data.name,
           professorEmail: data.email,
           universityName: data.university,
-          yourName: userProfile?.yourName,
-          yourEmail: userProfile?.yourEmail,
-          yourDegree: userProfile?.yourDegree,
-          yourUniversity: userProfile?.yourUniversity,
-          yourGPA: userProfile?.yourGPA,
+          fullName: userProfile?.fullName,
+          email: userProfile?.email,
+          degree: userProfile?.degree,
+          university: userProfile?.university,
+          gpa: userProfile?.gpa,
         });
       }
 
@@ -202,8 +219,9 @@ export default function EditApplicationPage() {
 
       toast.success("Application updated successfully!");
       router.push("/");
-    } catch (error: any) {
-      toast.error(`Error updating application: ${error.message}`);
+    } catch (error) {
+      const err = error as Error;
+      toast.error(`Error updating application: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,13 +14,9 @@ import { ArrowLeft, Save, CheckCircle2, User, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { FormField } from "@/components/ui/form";
 
-interface ProfileFormData {
-  yourName: string;
-  yourEmail: string;
-  yourDegree?: string;
-  yourUniversity?: string;
-  yourGPA?: string;
-}
+import type { UserProfileFormData } from "@/lib/types/userProfile";
+
+type ProfileFormData = UserProfileFormData;
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -32,11 +30,11 @@ export default function ProfilePage() {
     reset,
   } = useForm<ProfileFormData>({
     defaultValues: {
-      yourName: "",
-      yourEmail: "",
-      yourDegree: "",
-      yourUniversity: "",
-      yourGPA: "",
+      fullName: "",
+      email: "",
+      degree: "",
+      university: "",
+      gpa: "",
     },
   });
 
@@ -48,17 +46,18 @@ export default function ProfilePage() {
         if (response.ok) {
           const data = await response.json();
           reset({
-            yourName: data.yourName || "",
-            yourEmail: data.yourEmail || "",
-            yourDegree: data.yourDegree || "",
-            yourUniversity: data.yourUniversity || "",
-            yourGPA: data.yourGPA || "",
+            fullName: data.fullName || "",
+            email: data.email || "",
+            degree: data.degree || "",
+            university: data.university || "",
+            gpa: data.gpa || "",
           });
         } else {
           throw new Error("Failed to load profile");
         }
-      } catch (error: any) {
-        toast.error(`Error loading profile: ${error.message}`);
+      } catch (error) {
+        const err = error as Error;
+        toast.error(`Error loading profile: ${err.message}`);
       } finally {
         setIsLoading(false);
       }
@@ -84,8 +83,9 @@ export default function ProfilePage() {
       }
 
       toast.success("Profile saved successfully!");
-    } catch (error: any) {
-      toast.error(`Error saving profile: ${error.message}`);
+    } catch (error) {
+      const err = error as Error;
+      toast.error(`Error saving profile: ${err.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -134,49 +134,49 @@ export default function ProfilePage() {
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label="Your Name" error={errors.yourName?.message}>
+                <FormField label="Your Name" error={errors.fullName?.message}>
                   <Input
-                    placeholder="e.g., Nafisa Mubassira"
-                    {...register("yourName", {
+                    placeholder="e.g., Weifeng He"
+                    {...register("fullName", {
                       required: "Your name is required",
                     })}
-                    className={errors.yourName ? "border-destructive" : ""}
+                    className={errors.fullName ? "border-destructive" : ""}
                   />
                 </FormField>
-                <FormField label="Your Email" error={errors.yourEmail?.message}>
+                <FormField label="Your Email" error={errors.email?.message}>
                   <Input
                     type="email"
-                    placeholder="e.g., 228801027@stu.yzu.edu.cn"
-                    {...register("yourEmail", {
+                    placeholder="e.g., hewf@sjtu.edu.cn"
+                    {...register("email", {
                       required: "Your email is required",
                       pattern: {
                         value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
                         message: "Please enter a valid email address",
                       },
                     })}
-                    className={errors.yourEmail ? "border-destructive" : ""}
+                    className={errors.email ? "border-destructive" : ""}
                   />
                 </FormField>
               </div>
-              <FormField label="Your Degree" error={errors.yourDegree?.message}>
+              <FormField label="Your Degree" error={errors.degree?.message}>
                 <Input
-                  placeholder="e.g., B.Sc. in Microelectronics Science and Engineering"
-                  {...register("yourDegree")}
-                  className={errors.yourDegree ? "border-destructive" : ""}
+                  placeholder="e.g., Master of Science in Computer Science"
+                  {...register("degree")}
+                  className={errors.degree ? "border-destructive" : ""}
                 />
               </FormField>
-              <FormField label="Your University" error={errors.yourUniversity?.message}>
+              <FormField label="Your University" error={errors.university?.message}>
                 <Input
-                  placeholder="e.g., Yangzhou University"
-                  {...register("yourUniversity")}
-                  className={errors.yourUniversity ? "border-destructive" : ""}
+                  placeholder="e.g., Shanghai Jiao Tong University"
+                  {...register("university")}
+                  className={errors.university ? "border-destructive" : ""}
                 />
               </FormField>
-              <FormField label="Your GPA" error={errors.yourGPA?.message}>
+              <FormField label="Your GPA" error={errors.gpa?.message}>
                 <Input
-                  placeholder="e.g., 4.30/5.00"
-                  {...register("yourGPA")}
-                  className={errors.yourGPA ? "border-destructive" : ""}
+                  placeholder="e.g., 3.80/4.00"
+                  {...register("gpa")}
+                  className={errors.gpa ? "border-destructive" : ""}
                 />
               </FormField>
               <div className="bg-muted p-4 rounded-md">

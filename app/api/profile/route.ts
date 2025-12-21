@@ -1,31 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { UserProfileModel } from "@/lib/models/UserProfile";
+import type { UserProfileFormData } from "@/lib/types/userProfile";
 
 export const dynamic = "force-dynamic";
+
+interface ErrorResponse {
+  error: string;
+  details?: Record<string, string>;
+}
 
 // GET profile
 export async function GET() {
   try {
     await connectDB();
-    let profile = await UserProfileModel.findOne({ name: "default" });
+    const profile = await UserProfileModel.findOne({ name: "default" });
     
     // Return empty profile if it doesn't exist (no defaults)
     if (!profile) {
       return NextResponse.json({
-        yourName: "",
-        yourEmail: "",
-        yourDegree: "",
-        yourUniversity: "",
-        yourGPA: "",
+        fullName: "",
+        email: "",
+        degree: "",
+        university: "",
+        gpa: "",
       });
     }
 
     return NextResponse.json(profile);
-  } catch (error: any) {
-    console.error("Error fetching profile:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to fetch profile" },
+  } catch (error) {
+    const err = error as Error;
+    console.error("Error fetching profile:", err);
+    return NextResponse.json<ErrorResponse>(
+      { error: err.message || "Failed to fetch profile" },
       { status: 500 }
     );
   }
@@ -35,11 +42,11 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     await connectDB();
-    const body = await request.json();
-    const { yourName, yourEmail, yourDegree, yourUniversity, yourGPA } = body;
+    const body = await request.json() as UserProfileFormData;
+    const { fullName, email, degree, university, gpa } = body;
 
-    if (!yourName || !yourEmail) {
-      return NextResponse.json(
+    if (!fullName || !email) {
+      return NextResponse.json<ErrorResponse>(
         { error: "Name and email are required" },
         { status: 400 }
       );
@@ -47,15 +54,16 @@ export async function PUT(request: NextRequest) {
 
     const profile = await UserProfileModel.findOneAndUpdate(
       { name: "default" },
-      { yourName, yourEmail, yourDegree, yourUniversity, yourGPA },
+      { fullName, email, degree, university, gpa },
       { new: true, upsert: true }
     );
 
     return NextResponse.json(profile);
-  } catch (error: any) {
-    console.error("Error updating profile:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to update profile" },
+  } catch (error) {
+    const err = error as Error;
+    console.error("Error updating profile:", err);
+    return NextResponse.json<ErrorResponse>(
+      { error: err.message || "Failed to update profile" },
       { status: 500 }
     );
   }

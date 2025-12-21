@@ -197,11 +197,11 @@ export default function Home() {
           professorName: application.name,
           professorEmail: application.email,
           universityName: application.university,
-          yourName: userProfile.yourName,
-          yourEmail: userProfile.yourEmail,
-          yourDegree: userProfile.yourDegree,
-          yourUniversity: userProfile.yourUniversity,
-          yourGPA: userProfile.yourGPA,
+          fullName: userProfile.fullName,
+          email: userProfile.email,
+          degree: userProfile.degree,
+          university: userProfile.university,
+          gpa: userProfile.gpa,
         });
       }
 
@@ -215,11 +215,11 @@ export default function Home() {
           professorName: application.name,
           professorEmail: application.email,
           universityName: application.university,
-          yourName: userProfile.yourName,
-          yourEmail: userProfile.yourEmail,
-          yourDegree: userProfile.yourDegree,
-          yourUniversity: userProfile.yourUniversity,
-          yourGPA: userProfile.yourGPA,
+          fullName: userProfile.fullName,
+          email: userProfile.email,
+          degree: userProfile.degree,
+          university: userProfile.university,
+          gpa: userProfile.gpa,
         });
       } else {
         // Replace basic placeholders even without profile
@@ -358,11 +358,11 @@ export default function Home() {
             professorName: application.name,
             professorEmail: application.email,
             universityName: application.university,
-            yourName: userProfile.yourName,
-            yourEmail: userProfile.yourEmail,
-            yourDegree: userProfile.yourDegree,
-            yourUniversity: userProfile.yourUniversity,
-            yourGPA: userProfile.yourGPA,
+            fullName: userProfile.fullName,
+            email: userProfile.email,
+            degree: userProfile.degree,
+            university: userProfile.university,
+            gpa: userProfile.gpa,
           });
         }
 
@@ -376,11 +376,11 @@ export default function Home() {
             professorName: application.name,
             professorEmail: application.email,
             universityName: application.university,
-            yourName: userProfile.yourName,
-            yourEmail: userProfile.yourEmail,
-            yourDegree: userProfile.yourDegree,
-            yourUniversity: userProfile.yourUniversity,
-            yourGPA: userProfile.yourGPA,
+            fullName: userProfile.fullName,
+            email: userProfile.email,
+            degree: userProfile.degree,
+            university: userProfile.university,
+            gpa: userProfile.gpa,
           });
         } else {
           // Replace basic placeholders even without profile

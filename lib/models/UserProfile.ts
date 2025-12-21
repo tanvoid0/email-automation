@@ -1,25 +1,26 @@
 import { prop, getModelForClass, modelOptions } from "@typegoose/typegoose";
 import mongoose from "mongoose";
+import type { UserProfileData } from "@/lib/types/userProfile";
 
 @modelOptions({ schemaOptions: { timestamps: true } })
-export class UserProfile {
+export class UserProfile implements UserProfileData {
   @prop({ required: true, unique: true, default: "default" })
   public name!: string;
 
   @prop({ required: true })
-  public yourName!: string;
+  public fullName!: string;
 
   @prop({ required: true })
-  public yourEmail!: string;
+  public email!: string;
 
   @prop({ required: false })
-  public yourDegree?: string;
+  public degree?: string;
 
   @prop({ required: false })
-  public yourUniversity?: string;
+  public university?: string;
 
   @prop({ required: false })
-  public yourGPA?: string;
+  public gpa?: string;
 }
 
 export const UserProfileModel = mongoose.models.UserProfile || getModelForClass(UserProfile);
