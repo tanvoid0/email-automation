@@ -1,39 +1,83 @@
 /**
- * Application data structure
+ * Application-related types
+ * Shared between UI components and services
  */
-export interface ApplicationData {
+
+export type ApplicationStatus = "pending" | "sending" | "sent" | "error" | "cancelled";
+
+export interface Application {
   id: string;
-  name: string; // Professor/recipient name
+  name: string;
   university: string;
   email: string;
   emailText: string;
-  status: "pending" | "sending" | "sent" | "error";
+  status: ApplicationStatus;
   error?: string;
-  attachments?: string[]; // Array of attachment IDs
-  createdAt?: string;
-  updatedAt?: string;
+  attachments?: ApplicationAttachment[];
+  attachmentIds?: string[];
+}
+
+export interface ApplicationAttachment {
+  id?: string;
+  filename: string;
+  content: string;
+  contentType?: string;
 }
 
 /**
- * Application form data (for form handling)
+ * Application data from API (MongoDB format)
+ */
+export interface ApplicationApiResponse {
+  _id: string;
+  name: string;
+  university: string;
+  email: string;
+  emailText: string;
+  status?: ApplicationStatus;
+  error?: string;
+  attachments?: string[]; // Array of attachment IDs
+}
+
+/**
+ * Application form data
  */
 export interface ApplicationFormData {
   name: string;
   university: string;
   email: string;
   emailText: string;
-  attachments?: string[];
+  attachments?: (string | ApplicationAttachment)[];
 }
 
 /**
- * Application creation request
+ * Application update payload
  */
-export interface CreateApplicationRequest {
-  name: string;
-  university: string;
-  email: string;
-  emailText: string;
-  attachments?: string[];
-  status?: "pending" | "sending" | "sent" | "error";
+export interface ApplicationUpdatePayload {
+  name?: string;
+  university?: string;
+  email?: string;
+  emailText?: string;
+  status?: ApplicationStatus;
+  error?: string;
+  errorDetails?: ErrorDetails;
 }
 
+/**
+ * Error details for application errors
+ */
+export interface ErrorDetails {
+  message: string;
+  payloadSize?: {
+    emailBodySizeKB: number;
+    attachmentIdsCount: number;
+    requestPayloadSizeKB: number;
+    attachmentIds: string[];
+  };
+  timestamp: string;
+  httpStatus?: number;
+  httpStatusText?: string;
+  recipient?: string;
+  recipientEmail?: string;
+  subject?: string;
+  emailBodyPreview?: string;
+}

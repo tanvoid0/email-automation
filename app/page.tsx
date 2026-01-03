@@ -2,21 +2,27 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
+import { useToast } from "@/lib/hooks/useToast";
+import { useEmailQueue } from "@/lib/hooks/useEmailQueue";
 import { Button } from "@/components/ui/button";
 import { ApplicationList, type Application } from "./components/ApplicationList";
-import { Plus, Settings, Mail, Loader2 } from "lucide-react";
+import { EmailProgress } from "./components/EmailProgress";
+import { Plus, Settings, Mail, Loader2, Paperclip } from "lucide-react";
+import { NotificationBell } from "./components/NotificationBell";
+import { EmailPreparationService } from "@/lib/services/EmailPreparationService";
+import { ApplicationStatusService } from "@/lib/services/ApplicationStatusService";
+import type { EmailQueueItem } from "@/lib/utils/email-queue";
+import type { ApplicationApiResponse, ApplicationAttachment, ErrorDetails } from "@/lib/types/application";
+import type { AttachmentApiResponse, ApiErrorResponse } from "@/lib/types/api";
+import { getErrorMessage } from "@/lib/types/errors";
 
 export const dynamic = "force-dynamic";
 
 export default function Home() {
+  const toast = useToast();
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [bulkSendProgress, setBulkSendProgress] = useState<{
-    total: number;
-    sent: number;
-    inProgress: boolean;
-  } | null>(null);
+  const emailQueue = useEmailQueue();
 
   // Helper function for fetch with timeout
   const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs: number = 30000) => {
@@ -30,12 +36,40 @@ export default function Home() {
       });
       clearTimeout(timeoutId);
       return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
       clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         throw new Error(`Request timeout after ${timeoutMs}ms. The email server may be slow or unreachable.`);
       }
       throw error;
+    }
+  };
+
+  // Helper function to safely parse error responses
+  const parseErrorResponse = async (response: Response): Promise<string> => {
+    const contentType = response.headers.get("content-type");
+    
+    // Check if response is JSON
+    if (contentType && contentType.includes("application/json")) {
+      try {
+        const error = await response.json();
+        return error.error || error.message || `HTTP ${response.status}: ${response.statusText}`;
+      } catch (parseError) {
+        // If JSON parsing fails, fall through to text parsing
+      }
+    }
+    
+    // Try to parse as text
+    try {
+      const text = await response.text();
+      // If text is too long or looks like HTML, provide a generic message
+      if (text.length > 200 || text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+        return `HTTP ${response.status}: ${response.statusText || "Server error"}`;
+      }
+      return text || `HTTP ${response.status}: ${response.statusText || "Server error"}`;
+    } catch (textError) {
+      // If text parsing also fails, return a generic error
+      return `HTTP ${response.status}: ${response.statusText || "Unknown error"}`;
     }
   };
 
@@ -44,6 +78,49 @@ export default function Home() {
     loadApplications();
   }, []);
 
+  // Sync queue status with applications
+  useEffect(() => {
+    const syncQueueWithApplications = () => {
+      const queue = emailQueue.queue;
+      if (!queue || queue.items.length === 0) return;
+
+      // Update application statuses based on queue items
+      setApplications((prev) =>
+        prev.map((app) => {
+          const queueItem = queue.items.find((item) => item.applicationId === app.id);
+          if (queueItem) {
+            let newStatus: Application["status"] = app.status;
+            if (queueItem.status === "sent") {
+              newStatus = "sent";
+            } else if (queueItem.status === "error") {
+              newStatus = "error";
+            } else if (queueItem.status === "processing" || queueItem.status === "sending") {
+              newStatus = "sending";
+            }
+
+            // Update status in database if changed
+            if (newStatus !== app.status) {
+              updateApplicationStatus(app.id, newStatus, queueItem.error).catch(console.error);
+            }
+
+            return {
+              ...app,
+              status: newStatus,
+              error: queueItem.error,
+            };
+          }
+          return app;
+        })
+      );
+    };
+
+    // Sync periodically
+    const interval = setInterval(syncQueueWithApplications, 2000);
+    syncQueueWithApplications(); // Initial sync
+
+    return () => clearInterval(interval);
+  }, [emailQueue.queue, emailQueue.progress]);
+
   const loadApplications = async () => {
     try {
       setIsLoading(true);
@@ -51,22 +128,22 @@ export default function Home() {
       if (!response.ok) {
         throw new Error("Failed to load applications");
       }
-      const data = await response.json();
+      const data: ApplicationApiResponse[] = await response.json();
       console.log("[Home] Loaded applications from API:", {
         count: data.length,
-        applicationsWithAttachments: data.filter((p: any) => p.attachments && p.attachments.length > 0).length,
+        applicationsWithAttachments: data.filter((p) => p.attachments && p.attachments.length > 0).length,
       });
       
       // Fetch all attachment IDs from all applications
       const allAttachmentIds = new Set<string>();
-      data.forEach((p: any) => {
+      data.forEach((p) => {
         if (p.attachments && Array.isArray(p.attachments)) {
           p.attachments.forEach((id: string) => allAttachmentIds.add(id));
         }
       });
 
       // Fetch all attachments in batch
-      let attachmentsMap = new Map<string, any>();
+      const attachmentsMap = new Map<string, AttachmentApiResponse>();
       if (allAttachmentIds.size > 0) {
         try {
           const attachmentsResponse = await fetch("/api/attachments/batch", {
@@ -75,8 +152,8 @@ export default function Home() {
             body: JSON.stringify({ ids: Array.from(allAttachmentIds) }),
           });
           if (attachmentsResponse.ok) {
-            const attachments = await attachmentsResponse.json();
-            attachments.forEach((att: any) => {
+            const attachments: AttachmentApiResponse[] = await attachmentsResponse.json();
+            attachments.forEach((att) => {
               attachmentsMap.set(att._id, att);
             });
           }
@@ -86,44 +163,45 @@ export default function Home() {
       }
       
       // Convert MongoDB documents to Application format
-      const formattedApplications: Application[] = data.map((p: any) => {
+      const formattedApplications: Application[] = data.map((p) => {
         // Convert attachment IDs to attachment objects for display
-        const attachmentObjects = (p.attachments || [])
+        const attachmentObjects: ApplicationAttachment[] = (p.attachments || [])
           .map((id: string) => attachmentsMap.get(id))
-          .filter((att: any) => att !== undefined)
-          .map((att: any) => ({
+          .filter((att): att is AttachmentApiResponse => att !== undefined)
+          .map((att) => ({
             id: att._id,
             filename: att.filename,
             content: att.content,
             contentType: att.contentType,
           }));
 
-        const application = {
+        const application: Application = {
           id: p._id,
           name: p.name,
           university: p.university,
           email: p.email,
           emailText: p.emailText,
-          status: p.status || "pending",
+          status: (p.status || "pending") as Application["status"],
           error: p.error,
           attachments: attachmentObjects,
           attachmentIds: p.attachments || [], // Keep IDs for API calls
         };
         
-        if (application.attachments.length > 0) {
+        if (application.attachments && application.attachments.length > 0) {
           console.log("[Home] Application with attachments:", {
             name: application.name,
             attachmentsCount: application.attachments.length,
-            attachments: application.attachments.map((a: any) => a.filename),
+            attachments: application.attachments.map((a) => a.filename),
           });
         }
         
         return application;
       });
       setApplications(formattedApplications);
-    } catch (error: any) {
-      console.error("Error loading applications:", error);
-      toast.error(`Error loading applications: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      console.error("Error loading applications:", errorMessage);
+      toast.error(`Error loading applications: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -133,172 +211,77 @@ export default function Home() {
   const updateApplicationStatus = async (
     id: string,
     status: Application["status"],
-    error?: string
+    error?: string,
+    errorDetails?: ErrorDetails
   ) => {
     try {
-      const response = await fetch(`/api/applications/${id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status, error }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update application status");
-      }
-
-      return await response.json();
-    } catch (error: any) {
-      console.error("Error updating application status:", error);
+      await ApplicationStatusService.updateStatus(id, status, { error, errorDetails });
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      console.error("Error updating application status:", errorMessage);
     }
   };
 
+  // Helper function to prepare email items for queue
+  const prepareEmailItems = async (
+    applicationsToSend: Application[]
+  ): Promise<Omit<EmailQueueItem, 'id' | 'status' | 'createdAt'>[]> => {
+    // Convert Application to ApplicationData format
+    const applicationsData = applicationsToSend.map((app) => ({
+      id: app.id,
+      name: app.name,
+      university: app.university,
+      email: app.email,
+      emailText: app.emailText,
+      attachmentIds: app.attachmentIds || [],
+    }));
+
+    // Use service to prepare emails
+    const preparedEmails = await EmailPreparationService.prepareEmails(applicationsData);
+
+    // Convert to queue item format
+    return preparedEmails.map((email) => ({
+      applicationId: email.applicationId,
+      applicationName: email.applicationName,
+      email: email.to,
+      subject: email.subject,
+      text: email.text,
+      attachmentIds: email.attachmentIds,
+    }));
+  };
+
   const handleSendEmail = async (application: Application) => {
-    // Update status to sending
-    setApplications(
-      applications.map((p) =>
-        p.id === application.id ? { ...p, status: "sending" as const } : p
-      )
-    );
-    await updateApplicationStatus(application.id, "sending");
-
     try {
-      // Load user profile to replace any remaining placeholders
-      let userProfile = null;
-      try {
-        const profileResponse = await fetch("/api/profile");
-        if (profileResponse.ok) {
-          userProfile = await profileResponse.json();
-        }
-      } catch (error) {
-        console.warn("Failed to load user profile for email sending");
-      }
-
-      // Load template to get subject and attachments
-      let templateSubject = null;
-      let templateAttachments: any[] = [];
-      try {
-        const templateResponse = await fetch("/api/template");
-        if (templateResponse.ok) {
-          const templateData = await templateResponse.json();
-          templateSubject = templateData.subject;
-          templateAttachments = templateData.attachments || [];
-        }
-      } catch (error) {
-        console.warn("Failed to load template for email sending");
-      }
-
-      // Replace any remaining placeholders in email text
-      let finalEmailText = application.emailText;
-      if (userProfile) {
-        const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
-        finalEmailText = replaceTemplatePlaceholders(finalEmailText, {
-          professorName: application.name,
-          professorEmail: application.email,
-          universityName: application.university,
-          fullName: userProfile.fullName,
-          email: userProfile.email,
-          degree: userProfile.degree,
-          university: userProfile.university,
-          gpa: userProfile.gpa,
-        });
-      }
-
-      // Get subject from template or use fallback
-      let subject = templateSubject || "Request for Admission Acceptance Letter for Master's Program";
-      
-      // Replace placeholders in subject if needed
-      if (userProfile) {
-        const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
-        subject = replaceTemplatePlaceholders(subject, {
-          professorName: application.name,
-          professorEmail: application.email,
-          universityName: application.university,
-          fullName: userProfile.fullName,
-          email: userProfile.email,
-          degree: userProfile.degree,
-          university: userProfile.university,
-          gpa: userProfile.gpa,
-        });
-      } else {
-        // Replace basic placeholders even without profile
-        const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
-        subject = replaceTemplatePlaceholders(subject, {
-          professorName: application.name,
-          professorEmail: application.email,
-          universityName: application.university,
-        });
-      }
-
-      // Fetch application attachments by ID
-      let applicationAttachments: any[] = [];
-      if (application.attachmentIds && application.attachmentIds.length > 0) {
-        try {
-          const attachmentsResponse = await fetch("/api/attachments/batch", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ids: application.attachmentIds }),
-          });
-          if (attachmentsResponse.ok) {
-            applicationAttachments = await attachmentsResponse.json();
-          }
-        } catch (error) {
-          console.warn("Failed to fetch application attachments:", error);
-        }
-      }
-
-      // Merge template attachments with application-specific attachments
-      const allAttachments = [
-        ...(templateAttachments || []),
-        ...applicationAttachments.map(att => ({
-          filename: att.filename,
-          content: att.content,
-          contentType: att.contentType,
-        })),
-      ];
-
-      const response = await fetchWithTimeout(
-        "/api/email",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            to: application.email,
-            subject,
-            text: finalEmailText,
-            attachments: allAttachments.length > 0 ? allAttachments : undefined,
-          }),
-        },
-        30000 // 30 second timeout
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to send email");
-      }
-
-      // Update status to sent
+      // Update status to sending
       setApplications(
         applications.map((p) =>
-          p.id === application.id ? { ...p, status: "sent" as const, error: undefined } : p
+          p.id === application.id ? { ...p, status: "sending" as const } : p
         )
       );
-      await updateApplicationStatus(application.id, "sent");
-      toast.success(`Email sent to ${application.name}`);
-    } catch (error: any) {
+      await updateApplicationStatus(application.id, "sending");
+
+      // Prepare email item and add to queue
+      const emailItems = await prepareEmailItems([application]);
+      await emailQueue.addToQueue(emailItems);
+
+      toast.success(`Email queued for ${application.name}`, {
+        title: "Email Queued",
+        persist: false,
+      });
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      console.error("Error queueing email:", errorMessage);
+      toast.error(`Failed to queue email: ${errorMessage}`);
+      
       // Update status to error
       setApplications(
         applications.map((p) =>
           p.id === application.id
-            ? { ...p, status: "error" as const, error: error.message }
+            ? { ...p, status: "error" as const, error: errorMessage }
             : p
         )
       );
-      await updateApplicationStatus(application.id, "error", error.message);
-      toast.error(`Failed to send email to ${application.name}: ${error.message}`);
+      await updateApplicationStatus(application.id, "error", errorMessage);
     }
   };
 
@@ -306,185 +289,43 @@ export default function Home() {
     const applicationsToSend = applications.filter((p) => applicationIds.includes(p.id));
     const total = applicationsToSend.length;
 
-    // Initialize progress tracking
-    setBulkSendProgress({ total, sent: 0, inProgress: true });
-
-    // Update all to sending
-    for (const application of applicationsToSend) {
+    try {
+      // Update all to sending
+      const applicationIds = applicationsToSend.map((app) => app.id);
+      await ApplicationStatusService.updateMultipleStatuses(applicationIds, "sending");
+      
+      // Update local state
       setApplications((prev) =>
         prev.map((p) =>
-          p.id === application.id ? { ...p, status: "sending" as const } : p
+          applicationIds.includes(p.id) ? { ...p, status: "sending" as const } : p
         )
       );
-      await updateApplicationStatus(application.id, "sending");
-    }
 
-    // Load user profile once for all emails
-    let userProfile = null;
-    try {
-      const profileResponse = await fetch("/api/profile");
-      if (profileResponse.ok) {
-        userProfile = await profileResponse.json();
-      }
-    } catch (error) {
-      console.warn("Failed to load user profile for email sending");
-    }
+      // Prepare email items and add to queue
+      const emailItems = await prepareEmailItems(applicationsToSend);
+      await emailQueue.addToQueue(emailItems);
 
-    // Load template once for all emails to get subject and attachments
-    let templateSubject = null;
-    let templateAttachments: any[] = [];
-    try {
-      const templateResponse = await fetch("/api/template");
-      if (templateResponse.ok) {
-        const templateData = await templateResponse.json();
-        templateSubject = templateData.subject;
-        templateAttachments = templateData.attachments || [];
-      }
-    } catch (error) {
-      console.warn("Failed to load template for email sending");
-    }
-
-    let sentCount = 0;
-    let successCount = 0;
-
-    // Send emails sequentially to avoid overwhelming the SMTP server
-    for (const application of applicationsToSend) {
-      try {
-        // Replace any remaining placeholders in email text
-        let finalEmailText = application.emailText;
-        if (userProfile) {
-          const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
-          finalEmailText = replaceTemplatePlaceholders(finalEmailText, {
-            professorName: application.name,
-            professorEmail: application.email,
-            universityName: application.university,
-            fullName: userProfile.fullName,
-            email: userProfile.email,
-            degree: userProfile.degree,
-            university: userProfile.university,
-            gpa: userProfile.gpa,
-          });
-        }
-
-        // Get subject from template or use fallback
-        let subject = templateSubject || "Request for Admission Acceptance Letter for Master's Program";
-        
-        // Replace placeholders in subject if needed
-        if (userProfile) {
-          const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
-          subject = replaceTemplatePlaceholders(subject, {
-            professorName: application.name,
-            professorEmail: application.email,
-            universityName: application.university,
-            fullName: userProfile.fullName,
-            email: userProfile.email,
-            degree: userProfile.degree,
-            university: userProfile.university,
-            gpa: userProfile.gpa,
-          });
-        } else {
-          // Replace basic placeholders even without profile
-          const { replaceTemplatePlaceholders } = await import("@/lib/utils/template");
-          subject = replaceTemplatePlaceholders(subject, {
-            professorName: application.name,
-            professorEmail: application.email,
-            universityName: application.university,
-          });
-        }
-
-        // Fetch application attachments by ID
-        let applicationAttachments: any[] = [];
-        if (application.attachmentIds && application.attachmentIds.length > 0) {
-          try {
-            const attachmentsResponse = await fetch("/api/attachments/batch", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ids: application.attachmentIds }),
-            });
-            if (attachmentsResponse.ok) {
-              applicationAttachments = await attachmentsResponse.json();
-            }
-          } catch (error) {
-            console.warn("Failed to fetch application attachments:", error);
-          }
-        }
-
-        // Merge template attachments with application-specific attachments
-        const allAttachments = [
-          ...(templateAttachments || []),
-          ...applicationAttachments.map(att => ({
-            filename: att.filename,
-            content: att.content,
-            contentType: att.contentType,
-          })),
-        ];
-
-        const response = await fetchWithTimeout(
-          "/api/email",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              to: application.email,
-              subject,
-              text: finalEmailText,
-              attachments: allAttachments.length > 0 ? allAttachments : undefined,
-            }),
-          },
-          30000 // 30 second timeout
-        );
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || "Failed to send email");
-        }
-
-        // Update status to sent
-        sentCount++;
-        successCount++;
-        setBulkSendProgress({ total, sent: sentCount, inProgress: true });
+      toast.success(`Queued ${total} email(s) for sending`, {
+        title: "Emails Queued",
+        persist: false,
+      });
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      console.error("Error queueing bulk emails:", errorMessage);
+      toast.error(`Failed to queue emails: ${errorMessage}`);
+      
+      // Update status to error for all
+      for (const application of applicationsToSend) {
         setApplications((prev) =>
           prev.map((p) =>
             p.id === application.id
-              ? { ...p, status: "sent" as const, error: undefined }
+              ? { ...p, status: "error" as const, error: errorMessage }
               : p
           )
         );
-        await updateApplicationStatus(application.id, "sent");
-      } catch (error: any) {
-        // Update status to error (but still count as processed)
-        sentCount++;
-        setBulkSendProgress({ total, sent: sentCount, inProgress: true });
-        setApplications((prev) =>
-          prev.map((p) =>
-            p.id === application.id
-              ? { ...p, status: "error" as const, error: error.message }
-              : p
-          )
-        );
-        await updateApplicationStatus(application.id, "error", error.message);
+        await updateApplicationStatus(application.id, "error", errorMessage);
       }
-
-      // Small delay between emails
-      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-
-    // Update progress to completed
-    setBulkSendProgress({ total, sent: sentCount, inProgress: false });
-    
-    // Show completion toast
-    if (successCount === total) {
-      toast.success(`All ${total} email(s) sent successfully!`);
-    } else {
-      toast.warning(`${successCount} of ${total} email(s) sent successfully. ${total - successCount} failed.`);
-    }
-
-    // Clear progress after a delay
-    setTimeout(() => {
-      setBulkSendProgress(null);
-    }, 3000);
   };
 
 
@@ -512,11 +353,39 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error: ApiErrorResponse = await response.json();
         throw new Error(error.error || "Failed to update application");
       }
 
-      const updatedApplication = await response.json();
+      const updatedApplication: ApplicationApiResponse = await response.json();
+      
+      // Find the existing application to preserve its attachments
+      const existingApp = applications.find((p) => p.id === id);
+      
+      // Fetch attachments if there are attachment IDs
+      let attachmentObjects: ApplicationAttachment[] = [];
+      if (updatedApplication.attachments && updatedApplication.attachments.length > 0) {
+        try {
+          const attachmentsResponse = await fetch("/api/attachments/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: updatedApplication.attachments }),
+          });
+          if (attachmentsResponse.ok) {
+            const attachments: AttachmentApiResponse[] = await attachmentsResponse.json();
+            attachmentObjects = attachments.map((att) => ({
+              id: att._id,
+              filename: att.filename,
+              content: att.content,
+              contentType: att.contentType,
+            }));
+          }
+        } catch (error) {
+          console.warn("Failed to fetch attachments for updated application:", error);
+          // Fall back to existing attachments if available
+          attachmentObjects = existingApp?.attachments || [];
+        }
+      }
       
       // Update in local state
       const formattedApplication: Application = {
@@ -527,14 +396,16 @@ export default function Home() {
         emailText: updatedApplication.emailText,
         status: updatedApplication.status || "pending",
         error: updatedApplication.error,
-        attachments: updatedApplication.attachments || [],
+        attachments: attachmentObjects,
+        attachmentIds: updatedApplication.attachments || [],
       };
       
       setApplications(
         applications.map((p) => (p.id === id ? formattedApplication : p))
       );
-    } catch (error: any) {
-      toast.error(`Error updating application: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      toast.error(`Error updating application: ${errorMessage}`);
       throw error;
     }
   };
@@ -551,8 +422,9 @@ export default function Home() {
 
       setApplications(applications.filter((p) => p.id !== id));
       toast.success("Application removed successfully");
-    } catch (error: any) {
-      toast.error(`Error removing application: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      toast.error(`Error removing application: ${errorMessage}`);
     }
   };
 
@@ -578,10 +450,17 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
+                <NotificationBell />
                 <Link href="/applications/new" className="w-full sm:w-auto">
                   <Button className="w-full sm:w-auto bg-primary hover:bg-primary/90">
                     <Plus className="h-4 w-4 mr-2" />
                     Add Application
+                  </Button>
+                </Link>
+                <Link href="/attachments" className="w-full sm:w-auto">
+                  <Button variant="outline" className="w-full sm:w-auto">
+                    <Paperclip className="h-4 w-4 mr-2" />
+                    Attachments
                   </Button>
                 </Link>
                 <Link href="/settings" className="w-full sm:w-auto">
@@ -593,12 +472,25 @@ export default function Home() {
               </div>
             </div>
 
+        {/* Email Queue Progress */}
+        {emailQueue.progress.total > 0 && (
+          <EmailProgress
+            progress={emailQueue.progress}
+            onPause={emailQueue.pause}
+            onResume={emailQueue.resume}
+            onClear={emailQueue.clear}
+            onClearCompleted={emailQueue.clearCompleted}
+            isProcessing={emailQueue.isProcessing}
+          />
+        )}
+
         <ApplicationList
           applications={applications}
           onSendEmail={handleSendEmail}
           onBulkSend={handleBulkSend}
           onRemove={handleRemove}
-          bulkSendProgress={bulkSendProgress}
+          onAttachmentsUpdated={loadApplications}
+          isQueueProcessing={emailQueue.isProcessing}
         />
       </div>
     </main>

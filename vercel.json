@@ -1,0 +1,11 @@
+{
+  "buildCommand": "pnpm build",
+  "framework": "nextjs",
+  "installCommand": "pnpm install",
+  "functions": {
+    "app/api/email/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}
+

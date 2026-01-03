@@ -1,20 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
+import { useToast } from "@/lib/hooks/useToast";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Save, Sparkles, Mail, User, FileText, Wand2, CheckCircle2, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Sparkles, Mail, User, FileText, Wand2, CheckCircle2, Loader2, File, Paperclip, Plus, Upload, Clock, X } from "lucide-react";
 import Link from "next/link";
 import { FormField } from "@/components/ui/form";
-import { FileAttachments } from "@/app/components/FileAttachments";
-import { Attachment } from "@/lib/utils/attachments";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Attachment, fileToAttachment } from "@/lib/utils/attachments";
 import { useTemplate } from "@/lib/hooks/useTemplate";
+import { useEmailQueue } from "@/lib/hooks/useEmailQueue";
+import { cn } from "@/lib/utils";
 
 interface TemplateFormData {
   content: string;
@@ -27,6 +37,7 @@ import type { UserProfileFormData } from "@/lib/types/userProfile";
 type ProfileFormData = UserProfileFormData;
 
 export default function SettingsPage() {
+  const toast = useToast();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
@@ -36,9 +47,22 @@ export default function SettingsPage() {
   const [customizationPrompt, setCustomizationPrompt] = useState("");
   const [showCustomizationInput, setShowCustomizationInput] = useState(false);
   const [templateAttachments, setTemplateAttachments] = useState<Attachment[]>([]);
+  const [selectedAttachmentIds, setSelectedAttachmentIds] = useState<Set<string>>(new Set());
+  const [availableAttachments, setAvailableAttachments] = useState<Array<{_id: string; filename: string; contentType?: string}>>([]);
+  const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isPlaceholdersDialogOpen, setIsPlaceholdersDialogOpen] = useState(false);
+  const [isSmtpInfoDialogOpen, setIsSmtpInfoDialogOpen] = useState(false);
+  const [isAttachmentsDialogOpen, setIsAttachmentsDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Use the reusable template hook
   const { templateData, isLoading: isLoadingTemplate, reloadTemplate } = useTemplate();
+  
+  // Use email queue for batch size configuration
+  const emailQueue = useEmailQueue();
 
   const templateForm = useForm<TemplateFormData>({
     defaultValues: {
@@ -60,23 +84,132 @@ export default function SettingsPage() {
 
   const templateContent = templateForm.watch("content");
 
+  // Memoize loadAvailableAttachments to prevent infinite loops
+  const loadAvailableAttachments = useCallback(async () => {
+    try {
+      setIsLoadingAttachments(true);
+      const response = await fetch("/api/attachments");
+      if (!response.ok) {
+        throw new Error("Failed to load attachments");
+      }
+      const data = await response.json();
+      setAvailableAttachments(data);
+    } catch (error: any) {
+      console.error("Error loading attachments:", error);
+    } finally {
+      setIsLoadingAttachments(false);
+    }
+  }, []);
+
+  // Load available attachments once on mount
+  useEffect(() => {
+    loadAvailableAttachments();
+  }, [loadAvailableAttachments]);
+
+  // Clean up invalid attachment IDs when available attachments change
+  useEffect(() => {
+    if (availableAttachments.length > 0 && selectedAttachmentIds.size > 0) {
+      const availableIds = new Set(availableAttachments.map(att => att._id));
+      const validSelectedIds = Array.from(selectedAttachmentIds).filter(id => availableIds.has(id));
+      
+      if (validSelectedIds.length !== selectedAttachmentIds.size) {
+        // Some selected IDs are invalid (attachments were deleted)
+        // Automatically clean up invalid references from the template
+        const invalidIds = Array.from(selectedAttachmentIds).filter(id => !availableIds.has(id));
+        if (invalidIds.length > 0) {
+          console.log(`[Settings] Found ${invalidIds.length} invalid attachment reference(s), cleaning up...`);
+          // Clean up invalid references from the database first, then update UI
+          cleanupInvalidReferences().then(() => {
+            // After cleanup, update the selected IDs to only valid ones
+            setSelectedAttachmentIds(new Set(validSelectedIds));
+            toast.success(`Cleaned up ${invalidIds.length} invalid attachment reference(s)`);
+          }).catch((error) => {
+            console.error("[Settings] Error during cleanup:", error);
+            // Still update UI even if cleanup fails
+            setSelectedAttachmentIds(new Set(validSelectedIds));
+          });
+        } else {
+          setSelectedAttachmentIds(new Set(validSelectedIds));
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableAttachments]);
+
+  // Function to clean up invalid attachment references
+  const cleanupInvalidReferences = useCallback(async () => {
+    try {
+      const response = await fetch("/api/attachments/cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cleanupReferences: true, cleanupDangling: false }),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.references?.removedIds?.length > 0) {
+          console.log(`[Settings] Cleaned up ${result.references.removedIds.length} invalid attachment reference(s)`);
+          // Reload template to get updated state
+          await reloadTemplate();
+          await loadAvailableAttachments();
+        }
+      }
+    } catch (error) {
+      console.error("[Settings] Error cleaning up invalid references:", error);
+    }
+  }, [reloadTemplate, loadAvailableAttachments]);
+
+  // Sync template data when it loads and check for invalid references
+  useEffect(() => {
+    if (!isLoadingTemplate && templateData.content) {
+      templateForm.reset({
+        content: templateData.content,
+        description: templateData.description || "",
+        subject: templateData.subject || "",
+      });
+      // Sync attachments state with template data
+      setTemplateAttachments(templateData.attachments);
+      // Set selected attachment IDs from template
+      if (templateData.attachmentIds && templateData.attachmentIds.length > 0) {
+        setSelectedAttachmentIds(new Set(templateData.attachmentIds));
+        
+        // Check if any of these IDs are invalid (attachment was deleted)
+        // This will trigger cleanup if needed when availableAttachments loads
+        if (availableAttachments.length > 0) {
+          const availableIds = new Set(availableAttachments.map(att => att._id));
+          const invalidIds = templateData.attachmentIds.filter((id: string) => !availableIds.has(id));
+          if (invalidIds.length > 0) {
+            console.log(`[Settings] Found ${invalidIds.length} invalid attachment reference(s) in template, will clean up...`);
+            // The cleanup will be triggered by the useEffect that watches availableAttachments
+          }
+        }
+      }
+    }
+  }, [isLoadingTemplate, templateData.content, templateData.description, templateData.subject, templateData.attachmentIds, templateForm, availableAttachments]);
+
+  // Handle legacy attachment matching after available attachments load
+  useEffect(() => {
+    if (availableAttachments.length > 0 && templateAttachments.length > 0 && selectedAttachmentIds.size === 0) {
+      const matchedIds = new Set<string>();
+      templateAttachments.forEach((templateAtt) => {
+        const match = availableAttachments.find((att) => 
+          att.filename === templateAtt.filename
+        );
+        if (match) {
+          matchedIds.add(match._id);
+        }
+      });
+      if (matchedIds.size > 0) {
+        setSelectedAttachmentIds(matchedIds);
+      }
+    }
+  }, [availableAttachments, templateAttachments, selectedAttachmentIds.size]);
+
+  // Load profile on mount
   useEffect(() => {
     const loadProfile = async () => {
       try {
         setIsLoading(true);
-        
-        // Template is loaded by useTemplate hook, update form when it's ready
-        if (!isLoadingTemplate && templateData.content) {
-          templateForm.reset({
-            content: templateData.content,
-            description: templateData.description || "",
-            subject: templateData.subject || "",
-          });
-          // Sync attachments state with template data
-          setTemplateAttachments(templateData.attachments);
-        }
-
-        // Load profile
         const profileResponse = await fetch("/api/profile");
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
@@ -97,7 +230,88 @@ export default function SettingsPage() {
     };
 
     loadProfile();
-  }, [templateForm, profileForm, isLoadingTemplate, templateData]);
+  }, [profileForm]);
+
+  const toggleAttachmentSelection = (attachmentId: string) => {
+    const newSelected = new Set(selectedAttachmentIds);
+    if (newSelected.has(attachmentId)) {
+      newSelected.delete(attachmentId);
+    } else {
+      newSelected.add(attachmentId);
+    }
+    setSelectedAttachmentIds(newSelected);
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    setSelectedFiles(Array.from(files));
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleOpenAddDialog = () => {
+    setSelectedFiles([]);
+    setIsAddDialogOpen(true);
+  };
+
+  const handleCloseAddDialog = () => {
+    setIsAddDialogOpen(false);
+    setSelectedFiles([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleUploadAttachments = async () => {
+    if (selectedFiles.length === 0) {
+      toast.error("Please select at least one file");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const uploadPromises = selectedFiles.map(async (file) => {
+        const attachment = await fileToAttachment(file);
+        
+        const response = await fetch("/api/attachments", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(attachment),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || `Failed to upload ${file.name}`);
+        }
+
+        return await response.json();
+      });
+
+      const uploadedAttachments = await Promise.all(uploadPromises);
+      
+      // Add uploaded attachments to selected list
+      const newSelected = new Set(selectedAttachmentIds);
+      uploadedAttachments.forEach(att => {
+        newSelected.add(att._id);
+      });
+      setSelectedAttachmentIds(newSelected);
+      
+      // Reload available attachments
+      await loadAvailableAttachments();
+      
+      toast.success(`Successfully uploaded ${selectedFiles.length} attachment(s)`);
+      handleCloseAddDialog();
+    } catch (error: any) {
+      toast.error(`Error uploading attachments: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleCustomize = async () => {
     if (!templateContent) {
@@ -163,11 +377,24 @@ export default function SettingsPage() {
   const onTemplateSubmit = async (data: TemplateFormData) => {
     setIsSavingTemplate(true);
     try {
+      // Filter out invalid attachment IDs before saving
+      const availableIds = new Set(availableAttachments.map(att => att._id));
+      const validAttachmentIds = Array.from(selectedAttachmentIds).filter(id => availableIds.has(id));
+      
+      // If there were invalid IDs, clean them up from the database
+      if (validAttachmentIds.length !== selectedAttachmentIds.size) {
+        await cleanupInvalidReferences();
+      }
+      
+      // Convert selected attachment IDs to the format expected by the API
+      // The API will handle creating/finding attachments if they're objects
+      const attachmentIds = validAttachmentIds;
+      
       const payload = {
         content: data.content,
         description: data.description,
         subject: data.subject,
-        attachments: templateAttachments,
+        attachments: attachmentIds, // Send IDs, not full objects
       };
       
       console.log("[Settings] Saving template with attachments:", {
@@ -199,9 +426,15 @@ export default function SettingsPage() {
 
       // Reload template data to ensure consistency
       await reloadTemplate();
-      // Update local attachments state with saved data
-      if (savedData.attachments) {
-        setTemplateAttachments(savedData.attachments);
+      // Reload available attachments to get any new ones
+      await loadAvailableAttachments();
+      // Update selected attachment IDs from saved data
+      if (savedData.attachments && Array.isArray(savedData.attachments)) {
+        // Filter to only valid IDs
+        const validIds = savedData.attachments.filter((id: any): id is string => 
+          typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id.trim())
+        );
+        setSelectedAttachmentIds(new Set(validIds));
       }
 
       toast.success("Email template saved successfully!");
@@ -264,6 +497,55 @@ export default function SettingsPage() {
             </p>
           </div>
         </div>
+
+        {/* Email Queue Settings Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-primary" />
+              <CardTitle>Email Queue Settings</CardTitle>
+            </div>
+            <CardDescription>
+              Configure how many emails are sent in each batch to prevent timeouts
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="batch-size">Batch Size</Label>
+                <Input
+                  id="batch-size"
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={emailQueue.batchSize}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value, 10);
+                    if (!isNaN(value) && value >= 1 && value <= 50) {
+                      emailQueue.setBatchSize(value);
+                      toast.success(`Batch size updated to ${value}`);
+                    }
+                  }}
+                  className="max-w-[200px]"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Number of emails to send in each batch (1-50). Default: 10. Lower values reduce timeout risk.
+                </p>
+              </div>
+              <div className="bg-muted p-4 rounded-md">
+                <Label className="text-sm font-semibold mb-2 block">
+                  How This Works:
+                </Label>
+                <ul className="text-sm space-y-1 text-muted-foreground">
+                  <li>• Emails are processed in batches to prevent server timeouts</li>
+                  <li>• Queue persists across browser sessions</li>
+                  <li>• Progress is tracked in real-time</li>
+                  <li>• Lower batch sizes are safer for slow SMTP servers</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Personal Profile Section */}
         <Card>
@@ -366,24 +648,27 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="mb-4 space-y-3">
-              <div className="p-3 bg-muted border rounded-md">
-                <p className="text-sm text-muted-foreground">
-                  <strong className="text-foreground">SMTP Configuration:</strong> To test your email configuration, add <code className="bg-background px-1.5 py-0.5 rounded text-xs">SMTP_TEST_EMAIL</code> to your <code className="bg-background px-1.5 py-0.5 rounded text-xs">.env.local</code> file with your test email address, then click "Test Email Configuration".
-                </p>
-              </div>
-              <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
-                <p className="text-sm text-amber-900 dark:text-amber-100 font-semibold mb-2">
-                  ⚠️ For Tencent Exmail (@stu.yzu.edu.cn), you need an App Password:
-                </p>
-                <ol className="text-xs text-amber-800 dark:text-amber-200 space-y-1 list-decimal list-inside ml-2">
-                  <li>Log in to Tencent Exmail web interface</li>
-                  <li>Go to Settings (设置) → Account (账户)</li>
-                  <li>Find "Email Binding" (邮箱绑定) or "Client Password" (客户端密码)</li>
-                  <li>Click "Generate dedicated password" (生成专用密码)</li>
-                  <li>Use this app password in <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">SMTP_PASS</code> (NOT your regular password)</li>
-                </ol>
-              </div>
+            <div className="mb-4 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsSmtpInfoDialogOpen(true)}
+                className="text-xs"
+              >
+                <Mail className="h-3 w-3 mr-1" />
+                SMTP Configuration Info
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsPlaceholdersDialogOpen(true)}
+                className="text-xs"
+              >
+                <FileText className="h-3 w-3 mr-1" />
+                Available Placeholders
+              </Button>
             </div>
             <form onSubmit={templateForm.handleSubmit(onTemplateSubmit)} className="space-y-4">
               <div className="space-y-2">
@@ -424,67 +709,358 @@ export default function SettingsPage() {
                   <p className="text-sm text-destructive">{templateForm.formState.errors.content.message}</p>
                 )}
               </div>
-              <div className="space-y-2">
-                <Label>Email Attachments (Optional)</Label>
-                <p className="text-xs text-muted-foreground">
-                  Files attached here will be included with all emails.
-                </p>
-                <FileAttachments
-                  attachments={templateAttachments}
-                  onAttachmentsChange={(newAttachments) => {
-                    console.log("[Settings] Attachments changed:", {
-                      oldCount: templateAttachments.length,
-                      newCount: newAttachments.length,
-                      newAttachments: newAttachments,
-                    });
-                    setTemplateAttachments(newAttachments);
-                  }}
-                />
-              </div>
-              <div className="bg-muted p-4 rounded-md">
-                <Label className="text-sm font-semibold mb-2 block">
-                  Available Placeholders:
-                </Label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-semibold mb-1 text-foreground">Recipient Info:</p>
-                    <ul className="text-sm space-y-1 text-muted-foreground">
-                      <li>
-                        <code className="bg-background px-2 py-1 rounded">[PROFESSOR_NAME]</code> - Recipient's name
-                      </li>
-                      <li>
-                        <code className="bg-background px-2 py-1 rounded">[PROFESSOR_EMAIL]</code> - Recipient's email
-                      </li>
-                      <li>
-                        <code className="bg-background px-2 py-1 rounded">[UNIVERSITY_NAME]</code> - University name
-                      </li>
-                    </ul>
+                    <Label>Email Attachments (Optional)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Select attachments to include with all emails. These will be sent with every application email.
+                    </p>
                   </div>
-                  <div>
-                    <p className="text-xs font-semibold mb-1 text-foreground">Your Info (from Profile):</p>
-                    <ul className="text-sm space-y-1 text-muted-foreground">
-                      <li>
-                        <code className="bg-background px-2 py-1 rounded">[YOUR_NAME]</code> - Your name
-                      </li>
-                      <li>
-                        <code className="bg-background px-2 py-1 rounded">[YOUR_EMAIL]</code> - Your email
-                      </li>
-                      <li>
-                        <code className="bg-background px-2 py-1 rounded">[YOUR_DEGREE]</code> - Your degree
-                      </li>
-                      <li>
-                        <code className="bg-background px-2 py-1 rounded">[YOUR_UNIVERSITY]</code> - Your university
-                      </li>
-                      <li>
-                        <code className="bg-background px-2 py-1 rounded">[YOUR_GPA]</code> - Your GPA
-                      </li>
-                    </ul>
-                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsAttachmentsDialogOpen(true)}
+                  >
+                    <Paperclip className="h-4 w-4 mr-2" />
+                    Manage Attachments
+                    {(() => {
+                      // Only count attachments that are actually available
+                      const availableSelectedCount = Array.from(selectedAttachmentIds).filter(id => 
+                        availableAttachments.some(att => att._id === id)
+                      ).length;
+                      return availableSelectedCount > 0 ? (
+                        <span className="ml-2 px-1.5 py-0.5 bg-primary text-primary-foreground rounded text-xs">
+                          {availableSelectedCount}
+                        </span>
+                      ) : null;
+                    })()}
+                  </Button>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Note: Personal info placeholders are replaced from your profile settings, keeping your data private from AI.
-                </p>
               </div>
+
+              {/* Attachments Management Dialog */}
+              <Dialog open={isAttachmentsDialogOpen} onOpenChange={setIsAttachmentsDialogOpen}>
+                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Manage Email Attachments</DialogTitle>
+                    <DialogDescription>
+                      Select attachments to include with all emails. These will be sent with every application email.
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="space-y-4 py-4">
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleOpenAddDialog}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add New Attachment
+                      </Button>
+                    </div>
+                    
+                    {isLoadingAttachments ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Clock className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
+                        <span className="text-sm text-muted-foreground">Loading attachments...</span>
+                      </div>
+                    ) : availableAttachments.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground border rounded-md">
+                        <File className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No attachments available</p>
+                        <p className="text-xs mt-1">Click "Add New Attachment" to upload attachments</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto border rounded-md p-3">
+                        {availableAttachments.map((attachment) => (
+                          <div
+                            key={attachment._id}
+                            className={cn(
+                              "flex items-center gap-3 p-2 rounded-md cursor-pointer transition-colors",
+                              selectedAttachmentIds.has(attachment._id)
+                                ? "bg-primary/10 border border-primary"
+                                : "hover:bg-accent border border-transparent"
+                            )}
+                            onClick={() => toggleAttachmentSelection(attachment._id)}
+                          >
+                            <Checkbox
+                              checked={selectedAttachmentIds.has(attachment._id)}
+                              onCheckedChange={() => toggleAttachmentSelection(attachment._id)}
+                            />
+                            <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{attachment.filename}</p>
+                              {attachment.contentType && (
+                                <p className="text-xs text-muted-foreground">{attachment.contentType}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                     {(() => {
+                       // Only count attachments that are actually available
+                       const availableSelectedCount = Array.from(selectedAttachmentIds).filter(id => 
+                         availableAttachments.some(att => att._id === id)
+                       ).length;
+                       const missingCount = selectedAttachmentIds.size - availableSelectedCount;
+                       
+                       return (
+                         <>
+                           {availableSelectedCount > 0 && (
+                             <p className="text-xs text-muted-foreground text-center">
+                               {availableSelectedCount} attachment{availableSelectedCount > 1 ? 's' : ''} selected for template
+                             </p>
+                           )}
+                           {missingCount > 0 && (
+                             <div className="flex flex-col items-center gap-2">
+                               <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
+                                 {missingCount} selected attachment{missingCount > 1 ? 's' : ''} not found (may have been deleted)
+                               </p>
+                               <Button
+                                 type="button"
+                                 variant="outline"
+                                 size="sm"
+                                 onClick={async () => {
+                                   await cleanupInvalidReferences();
+                                   toast.success("Cleaned up invalid attachment references");
+                                 }}
+                                 className="text-xs h-7"
+                               >
+                                 <X className="h-3 w-3 mr-1" />
+                                 Clean Up References
+                               </Button>
+                             </div>
+                           )}
+                         </>
+                       );
+                     })()}
+                  </div>
+
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsAttachmentsDialogOpen(false)}
+                    >
+                      Done
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Add Attachment Dialog */}
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Add New Attachment</DialogTitle>
+                    <DialogDescription>
+                      Upload one or more files to add to your attachments library
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="space-y-4 py-4">
+                    <div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="w-full"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        {isUploading ? "Uploading..." : "Choose Files"}
+                      </Button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        onChange={handleFileSelect}
+                        className="hidden"
+                        accept="*/*"
+                      />
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Maximum file size: 10MB per file
+                      </p>
+                    </div>
+
+                    {selectedFiles.length > 0 && (
+                      <div className="space-y-2 border rounded-md p-3 bg-muted/50 max-h-[300px] overflow-y-auto">
+                        <div className="text-sm font-medium">Selected Files ({selectedFiles.length}):</div>
+                        <div className="space-y-1">
+                          {selectedFiles.map((file, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-2 bg-background rounded border"
+                            >
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm truncate" title={file.name}>
+                                    {file.name}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {file.size ? `${(file.size / 1024).toFixed(1)} KB` : ''}
+                                    {file.type && ` • ${file.type}`}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveFile(index)}
+                                disabled={isUploading}
+                                className="flex-shrink-0"
+                              >
+                                <X className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={handleCloseAddDialog}
+                      disabled={isUploading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleUploadAttachments}
+                      disabled={isUploading || selectedFiles.length === 0}
+                    >
+                      {isUploading ? (
+                        <>
+                          <Clock className="h-4 w-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload {selectedFiles.length > 0 ? `(${selectedFiles.length})` : ""}
+                        </>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Placeholders Info Dialog */}
+              <Dialog open={isPlaceholdersDialogOpen} onOpenChange={setIsPlaceholdersDialogOpen}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Available Placeholders</DialogTitle>
+                    <DialogDescription>
+                      Use these placeholders in your email template. They will be automatically replaced with actual values.
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="space-y-4 py-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold">Recipient Info:</p>
+                        <ul className="text-sm space-y-2 text-muted-foreground">
+                          <li>
+                            <code className="bg-muted px-2 py-1 rounded text-xs">[PROFESSOR_NAME]</code>
+                            <span className="ml-2">- Recipient's name</span>
+                          </li>
+                          <li>
+                            <code className="bg-muted px-2 py-1 rounded text-xs">[PROFESSOR_EMAIL]</code>
+                            <span className="ml-2">- Recipient's email</span>
+                          </li>
+                          <li>
+                            <code className="bg-muted px-2 py-1 rounded text-xs">[UNIVERSITY_NAME]</code>
+                            <span className="ml-2">- University name</span>
+                          </li>
+                        </ul>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold">Your Info (from Profile):</p>
+                        <ul className="text-sm space-y-2 text-muted-foreground">
+                          <li>
+                            <code className="bg-muted px-2 py-1 rounded text-xs">[YOUR_NAME]</code>
+                            <span className="ml-2">- Your name</span>
+                          </li>
+                          <li>
+                            <code className="bg-muted px-2 py-1 rounded text-xs">[YOUR_EMAIL]</code>
+                            <span className="ml-2">- Your email</span>
+                          </li>
+                          <li>
+                            <code className="bg-muted px-2 py-1 rounded text-xs">[YOUR_DEGREE]</code>
+                            <span className="ml-2">- Your degree</span>
+                          </li>
+                          <li>
+                            <code className="bg-muted px-2 py-1 rounded text-xs">[YOUR_UNIVERSITY]</code>
+                            <span className="ml-2">- Your university</span>
+                          </li>
+                          <li>
+                            <code className="bg-muted px-2 py-1 rounded text-xs">[YOUR_GPA]</code>
+                            <span className="ml-2">- Your GPA</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                    <div className="bg-muted p-3 rounded-md">
+                      <p className="text-xs text-muted-foreground">
+                        <strong className="text-foreground">Note:</strong> Personal info placeholders are replaced from your profile settings, keeping your data private from AI.
+                      </p>
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsPlaceholdersDialogOpen(false)}>
+                      Close
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* SMTP Configuration Info Dialog */}
+              <Dialog open={isSmtpInfoDialogOpen} onOpenChange={setIsSmtpInfoDialogOpen}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>SMTP Configuration</DialogTitle>
+                    <DialogDescription>
+                      Information about configuring SMTP settings for sending emails
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="space-y-4 py-4">
+                    <div className="p-3 bg-muted border rounded-md">
+                      <p className="text-sm text-muted-foreground">
+                        <strong className="text-foreground">SMTP Configuration:</strong> To test your email configuration, add <code className="bg-background px-1.5 py-0.5 rounded text-xs">SMTP_TEST_EMAIL</code> to your <code className="bg-background px-1.5 py-0.5 rounded text-xs">.env.local</code> file with your test email address, then click "Test Email Configuration".
+                      </p>
+                    </div>
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
+                      <p className="text-sm text-amber-900 dark:text-amber-100 font-semibold mb-2">
+                        ⚠️ For Tencent Exmail (@stu.yzu.edu.cn), you need an App Password:
+                      </p>
+                      <ol className="text-xs text-amber-800 dark:text-amber-200 space-y-1 list-decimal list-inside ml-2">
+                        <li>Log in to Tencent Exmail web interface</li>
+                        <li>Go to Settings (设置) → Account (账户)</li>
+                        <li>Find "Email Binding" (邮箱绑定) or "Client Password" (客户端密码)</li>
+                        <li>Click "Generate dedicated password" (生成专用密码)</li>
+                        <li>Use this app password in <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">SMTP_PASS</code> (NOT your regular password)</li>
+                      </ol>
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsSmtpInfoDialogOpen(false)}>
+                      Close
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
                   <Button

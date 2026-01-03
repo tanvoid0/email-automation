@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
+import { useToast } from "@/lib/hooks/useToast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +20,7 @@ import { DEFAULT_EMAIL_TEMPLATE } from "@/lib/constants/emailTemplate";
 import { EmailDiff } from "@/app/components/EmailDiff";
 import { FileAttachments } from "@/app/components/FileAttachments";
 import { Attachment } from "@/lib/utils/attachments";
+import { PlaceholderValues } from "@/app/components/PlaceholderValues";
 
 interface Application {
   _id: string;
@@ -31,6 +32,7 @@ interface Application {
 }
 
 export default function EditApplicationPage() {
+  const toast = useToast();
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
@@ -41,6 +43,8 @@ export default function EditApplicationPage() {
   const [customizedEmail, setCustomizedEmail] = useState<string | null>(null);
   const [application, setApplication] = useState<Application | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [existingAttachmentIds, setExistingAttachmentIds] = useState<string[]>([]);
+  const [userAddedAttachments, setUserAddedAttachments] = useState<Attachment[]>([]);
 
   const {
     register,
@@ -83,6 +87,8 @@ export default function EditApplicationPage() {
         });
         // Load attachments by ID if they exist
         if (data.attachments && data.attachments.length > 0) {
+          // Store existing attachment IDs (these should be sent as IDs, not recreated)
+          setExistingAttachmentIds(data.attachments.map((id: any) => id.toString()));
           try {
             const attachmentsResponse = await fetch("/api/attachments/batch", {
               method: "POST",
@@ -102,6 +108,7 @@ export default function EditApplicationPage() {
             setAttachments([]);
           }
         } else {
+          setExistingAttachmentIds([]);
           setAttachments([]);
         }
       } catch (error) {
@@ -198,6 +205,14 @@ export default function EditApplicationPage() {
         });
       }
 
+      // Prepare attachments: send existing ones as IDs, new ones as objects
+      // Existing attachments should be sent as IDs (they already exist), new files as objects
+      const existingCount = existingAttachmentIds.length;
+      const allAttachments: (string | Attachment)[] = [
+        ...existingAttachmentIds, // Existing attachments as IDs (reuse - no new creation)
+        ...attachments.slice(existingCount), // Only new files added by user (as objects)
+      ];
+
       const response = await fetch(`/api/applications/${id}`, {
         method: "PATCH",
         headers: {
@@ -208,7 +223,7 @@ export default function EditApplicationPage() {
           university: data.university,
           email: data.email,
           emailText: finalEmailText,
-          attachments: attachments,
+          attachments: allAttachments.length > 0 ? allAttachments : undefined,
         }),
       });
 
@@ -276,6 +291,12 @@ export default function EditApplicationPage() {
           </div>
         </div>
 
+        <PlaceholderValues
+          professorName={recipientName}
+          professorEmail={watch("email")}
+          universityName={universityName}
+        />
+
         <Card>
           <CardHeader>
             <CardTitle>Application Information</CardTitle>
@@ -321,10 +342,16 @@ export default function EditApplicationPage() {
                 <p className="text-xs text-muted-foreground">
                   Add files specific to this application. These will be merged with template attachments.
                 </p>
-                <FileAttachments
-                  attachments={attachments}
-                  onAttachmentsChange={setAttachments}
-                />
+            <FileAttachments
+              attachments={attachments}
+              onAttachmentsChange={(newAttachments) => {
+                // Keep existing attachments at the beginning, new ones at the end
+                const existingCount = existingAttachmentIds.length;
+                const userAdded = newAttachments.slice(existingCount);
+                setUserAddedAttachments(userAdded);
+                setAttachments(newAttachments);
+              }}
+            />
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button

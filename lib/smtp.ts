@@ -1,4 +1,6 @@
 import nodemailer from "nodemailer";
+import type { SendEmailOptions, SendEmailResult, EmailAttachment } from "@/lib/types/smtp";
+import { getErrorMessage } from "@/lib/types/errors";
 
 const smtpConfig = {
   host: process.env.SMTP_HOST,
@@ -29,18 +31,7 @@ export async function sendEmail({
   text,
   html,
   attachments,
-}: {
-  to: string;
-  subject: string;
-  text?: string;
-  html?: string;
-  attachments?: Array<{
-    filename: string;
-    path?: string;
-    content?: string | Buffer;
-    contentType?: string;
-  }>;
-}) {
+}: SendEmailOptions): Promise<SendEmailResult> {
   if (!smtpConfig.host || !smtpConfig.auth.user || !smtpConfig.auth.pass) {
     throw new Error("SMTP configuration is incomplete. Please check your .env.local file.");
   }
@@ -54,8 +45,14 @@ export async function sendEmail({
   const transporter = nodemailer.createTransport(smtpConfig);
 
   // Convert base64 attachments to Buffer format for nodemailer
-  const formattedAttachments = attachments?.map(att => {
-    const attachment: any = {
+  interface NodemailerAttachment {
+    filename: string;
+    content?: Buffer | string;
+    contentType?: string;
+  }
+
+  const formattedAttachments: NodemailerAttachment[] | undefined = attachments?.map((att) => {
+    const attachment: NodemailerAttachment = {
       filename: att.filename,
     };
     
@@ -92,8 +89,9 @@ export async function sendEmail({
       try {
         await transporter.verify();
         console.log(`[SMTP] Connection verified successfully`);
-      } catch (verifyError: any) {
-        console.warn(`[SMTP] Connection verification failed, but continuing anyway:`, verifyError.message);
+      } catch (verifyError: unknown) {
+        const errorMessage = getErrorMessage(verifyError);
+        console.warn(`[SMTP] Connection verification failed, but continuing anyway:`, errorMessage);
         // Continue anyway - some servers don't support verify() but can still send emails
       }
     } else {
@@ -109,43 +107,50 @@ export async function sendEmail({
     
     return {
       success: true,
-      messageId: info.messageId,
+      messageId: info.messageId || '',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[SMTP] Error sending email:", error);
     
+    // Type guard for nodemailer errors
+    const isNodemailerError = (err: unknown): err is { code?: string; response?: string; message?: string } => {
+      return typeof err === 'object' && err !== null;
+    };
+    
     // Provide more helpful error messages
-    if (error.code === "ETIMEDOUT" || error.code === "ECONNRESET") {
-      throw new Error(`SMTP connection timeout. Please check your network connection and SMTP server settings.`);
-    } else if (error.code === "EAUTH") {
-      const isExmail = smtpConfig.host?.includes("exmail.qq.com");
-      const responseMessage = error.response || error.message || "";
-      const isSystemBusy = responseMessage.toLowerCase().includes("system busy") || responseMessage.includes("535");
-      
-      if (isExmail) {
-        let errorMsg = `SMTP authentication failed. `;
+    if (isNodemailerError(error)) {
+      if (error.code === "ETIMEDOUT" || error.code === "ECONNRESET") {
+        throw new Error(`SMTP connection timeout. Please check your network connection and SMTP server settings.`);
+      } else if (error.code === "EAUTH") {
+        const isExmail = smtpConfig.host?.includes("exmail.qq.com");
+        const responseMessage = error.response || error.message || "";
+        const isSystemBusy = responseMessage.toLowerCase().includes("system busy") || responseMessage.includes("535");
         
-        if (isSystemBusy) {
-          errorMsg += `The "system busy" error usually means:\n`;
-          errorMsg += `1. You're using your regular password instead of an app-specific password\n`;
-          errorMsg += `2. SMTP service might not be enabled in your account settings\n`;
-          errorMsg += `3. Too many failed attempts (wait 5-10 minutes and try again)\n\n`;
-          errorMsg += `Solution: Generate an app-specific password in Exmail Settings → Account → Email Binding, then use it in SMTP_PASS.`;
+        if (isExmail) {
+          let errorMsg = `SMTP authentication failed. `;
+          
+          if (isSystemBusy) {
+            errorMsg += `The "system busy" error usually means:\n`;
+            errorMsg += `1. You're using your regular password instead of an app-specific password\n`;
+            errorMsg += `2. SMTP service might not be enabled in your account settings\n`;
+            errorMsg += `3. Too many failed attempts (wait 5-10 minutes and try again)\n\n`;
+            errorMsg += `Solution: Generate an app-specific password in Exmail Settings → Account → Email Binding, then use it in SMTP_PASS.`;
+          } else {
+            errorMsg += `Tencent Exmail requires an app-specific password (not your regular password). Please generate one in your Exmail settings and use it in SMTP_PASS.`;
+          }
+          
+          throw new Error(errorMsg);
         } else {
-          errorMsg += `Tencent Exmail requires an app-specific password (not your regular password). Please generate one in your Exmail settings and use it in SMTP_PASS.`;
+          throw new Error(`SMTP authentication failed. Please check your email and password. If your email provider requires app passwords, use an app-specific password instead of your regular password.`);
         }
-        
-        throw new Error(errorMsg);
-      } else {
-        throw new Error(`SMTP authentication failed. Please check your email and password. If your email provider requires app passwords, use an app-specific password instead of your regular password.`);
+      } else if (error.code === "ECONNREFUSED") {
+        throw new Error(`Cannot connect to SMTP server. Please check SMTP_HOST and SMTP_PORT settings.`);
       }
-    } else if (error.code === "ECONNREFUSED") {
-      throw new Error(`Cannot connect to SMTP server. Please check SMTP_HOST and SMTP_PORT settings.`);
-    } else if (error.message) {
-      throw new Error(`SMTP error: ${error.message}`);
-    } else {
-      throw error;
     }
+    
+    // Fallback to generic error message
+    const errorMessage = getErrorMessage(error);
+    throw new Error(`SMTP error: ${errorMessage}`);
   }
 }
 

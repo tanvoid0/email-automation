@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { useToast } from "@/lib/hooks/useToast";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { EmailForm } from "@/app/components/EmailForm";
@@ -9,6 +9,7 @@ import { ArrowLeft } from "lucide-react";
 import type { UserProfileData } from "@/lib/types/userProfile";
 
 export default function NewApplicationPage() {
+  const toast = useToast();
   const router = useRouter();
 
   const handleCustomizeEmail = async (
@@ -50,7 +51,7 @@ export default function NewApplicationPage() {
       filename: string;
       content: string;
       contentType?: string;
-    }>;
+    } | string>; // Can be attachment objects or IDs
   }) => {
     try {
       // Validate required fields
@@ -80,7 +81,7 @@ export default function NewApplicationPage() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error: { error?: string; details?: Record<string, string> } = await response.json();
         const errorMessage = error.details 
           ? `Validation failed: ${JSON.stringify(error.details)}`
           : error.error || "Failed to add application";
@@ -93,11 +94,15 @@ export default function NewApplicationPage() {
         throw new Error(errorMessage);
       }
 
-      toast.success("Application added successfully!");
+      toast.success("Application added successfully!", {
+        id: "application-added",
+        duration: 3000,
+        persist: false,
+      });
       // Redirect to home page after successful addition
       router.push("/");
-    } catch (error) {
-      const err = error as Error;
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error(String(error));
       
       // Check if error is related to missing user profile
       if (err.message === "PROFILE_REQUIRED" || err.message.includes("profile") || err.message.includes("user") || err.message.includes("required")) {

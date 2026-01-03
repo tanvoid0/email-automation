@@ -1,7 +1,8 @@
-import { prop, getModelForClass, modelOptions } from "@typegoose/typegoose";
+import { prop, getModelForClass, modelOptions, type ReturnModelType } from "@typegoose/typegoose";
 import mongoose from "mongoose";
 
-class Attachment {
+// Nested schema for template attachments
+class TemplateAttachment {
   @prop({ required: true })
   public filename!: string;
 
@@ -12,7 +13,16 @@ class Attachment {
   public contentType?: string;
 }
 
-@modelOptions({ schemaOptions: { timestamps: true } })
+@modelOptions({ 
+  schemaOptions: { 
+    timestamps: true,
+    collection: "emailtemplates"
+  },
+  options: {
+    allowMixed: 0,
+    customName: "EmailTemplate",
+  }
+})
 export class EmailTemplate {
   @prop({ required: true, unique: true, default: "default" })
   public name!: string;
@@ -26,13 +36,35 @@ export class EmailTemplate {
   @prop({ required: false })
   public subject?: string;
 
+  // Store attachment IDs instead of embedded objects for better relationship tracking
   @prop({ 
     required: false, 
-    type: () => [Attachment],
+    type: [String],
     default: []
   })
-  public attachments?: Attachment[];
+  public attachments?: string[]; // Array of attachment IDs
 }
 
-export const EmailTemplateModel = mongoose.models.EmailTemplate || getModelForClass(EmailTemplate);
+// Proper model initialization for Next.js with hot reloading
+function getEmailTemplateModel(): ReturnModelType<typeof EmailTemplate, {}> {
+  try {
+    // Check if model already exists in mongoose registry
+    if (mongoose.models.EmailTemplate) {
+      return mongoose.models.EmailTemplate as ReturnModelType<typeof EmailTemplate, {}>;
+    }
+    // Create new model with explicit name
+    return getModelForClass(EmailTemplate, {
+      existingMongoose: mongoose,
+      schemaOptions: { collection: "emailtemplates" }
+    });
+  } catch (error) {
+    // If model exists but compilation failed, return existing
+    if (mongoose.models.EmailTemplate) {
+      return mongoose.models.EmailTemplate as ReturnModelType<typeof EmailTemplate, {}>;
+    }
+    throw error;
+  }
+}
+
+export const EmailTemplateModel = getEmailTemplateModel();
 

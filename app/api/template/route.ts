@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { EmailTemplateModel } from "@/lib/models/EmailTemplate";
+import { AttachmentModel } from "@/lib/models/Attachment";
 import { DEFAULT_EMAIL_TEMPLATE, DEFAULT_EMAIL_SUBJECT } from "@/lib/constants/emailTemplate";
+import mongoose from "mongoose";
 
 export const dynamic = "force-dynamic";
 
@@ -36,27 +38,16 @@ export async function GET() {
     // Always return DB template (single source of truth is the database)
     // Convert to plain object and ensure attachments is always an array
     const templateData = template.toObject ? template.toObject() : template;
-    console.log("[Template API] Template data after toObject:", {
-      hasAttachments: !!templateData.attachments,
-      attachmentsType: typeof templateData.attachments,
-      attachmentsIsArray: Array.isArray(templateData.attachments),
-      attachmentsLength: templateData.attachments?.length || 0,
-    });
     
+    // Ensure attachments is an array of IDs (not embedded objects)
     if (!templateData.attachments) {
-      console.log("[Template API] Attachments missing, setting to empty array");
+      templateData.attachments = [];
+    } else if (!Array.isArray(templateData.attachments)) {
       templateData.attachments = [];
     } else {
-      console.log("[Template API] Template data attachments:", {
-        count: templateData.attachments.length,
-        attachments: templateData.attachments,
-      });
+      // Convert to strings if needed
+      templateData.attachments = templateData.attachments.map((id: any) => id.toString());
     }
-    
-    console.log("[Template API] Returning template data:", {
-      hasAttachments: !!templateData.attachments,
-      attachmentsLength: templateData.attachments?.length || 0,
-    });
     
     return NextResponse.json(templateData);
   } catch (error: any) {
@@ -116,25 +107,111 @@ export async function PUT(request: NextRequest) {
       template.subject = subject;
       
       // Only update attachments if provided (preserve existing if not provided)
+      let attachmentIdStrings: string[] | undefined = undefined;
       if (attachments !== undefined) {
-        template.attachments = attachments;
-        // Mark the nested array as modified so Mongoose saves it
+        // Extract old attachment IDs, handling both embedded objects and string IDs
+        const oldAttachmentIds: string[] = [];
+        if (template.attachments && Array.isArray(template.attachments)) {
+          for (const item of template.attachments) {
+            if (typeof item === 'string') {
+              oldAttachmentIds.push(item);
+            } else if (item && typeof item === 'object') {
+              const itemObj = item as any;
+              if ('_id' in itemObj) {
+                oldAttachmentIds.push(itemObj._id.toString());
+              } else if ('id' in itemObj) {
+                oldAttachmentIds.push(itemObj.id.toString());
+              }
+            }
+          }
+        }
+        
+        let newAttachmentIds: string[] = [];
+
+        // Handle both old format (embedded objects) and new format (IDs)
+        if (attachments.length > 0) {
+          const firstAttachment = attachments[0];
+          
+          if (typeof firstAttachment === 'object' && firstAttachment !== null && firstAttachment.filename && firstAttachment.content) {
+            // Old format: embedded objects - convert to IDs
+            const { findOrCreateAttachment } = await import("@/lib/utils/attachments");
+            const attachmentPromises = attachments.map(async (att: any) => {
+              return await findOrCreateAttachment(AttachmentModel, {
+                filename: att.filename,
+                content: att.content,
+                contentType: att.contentType,
+                size: att.size,
+              });
+            });
+            newAttachmentIds = await Promise.all(attachmentPromises);
+          } else if (typeof firstAttachment === 'string') {
+            // New format: already IDs
+            newAttachmentIds = attachments.filter((id: any): id is string => 
+              typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id.trim())
+            );
+          }
+        }
+
+        // Ensure attachments is set as an array of strings (IDs)
+        // Use direct assignment and markModified to ensure Mongoose recognizes it as strings
+        attachmentIdStrings = newAttachmentIds.map(id => String(id).trim());
+        // Directly assign and mark as modified - Mongoose should respect the schema definition
+        template.attachments = attachmentIdStrings;
         template.markModified('attachments');
+        
+        // Update attachment references
+        const { syncTemplateAttachmentReferences } = await import("@/lib/utils/attachments");
+        await syncTemplateAttachmentReferences(AttachmentModel, "default", oldAttachmentIds, attachmentIdStrings);
+        
         console.log("[Template API] Setting attachments:", {
-          count: attachments.length,
-          firstAttachment: attachments[0] ? {
-            filename: attachments[0].filename,
-            hasContent: !!attachments[0].content,
-            contentLength: attachments[0].content?.length || 0,
-            contentType: attachments[0].contentType,
-          } : null,
+          count: attachmentIdStrings.length,
+          attachmentIds: attachmentIdStrings,
         });
       } else {
         console.log("[Template API] No attachments provided, preserving existing");
       }
       
-      // Save the document to ensure Mongoose properly handles nested arrays
-      await template.save();
+      // Save the document - use direct MongoDB update to bypass Mongoose casting issues
+      try {
+        await template.save();
+      } catch (saveError: any) {
+        // If save fails due to schema mismatch (embedded object casting), use direct MongoDB update
+        if (saveError.name === 'ValidationError' || saveError.message?.includes('Cast to embedded')) {
+          console.log("[Template API] Schema mismatch detected, using direct MongoDB update");
+          // Use direct MongoDB connection to bypass Mongoose schema validation entirely
+          const db = mongoose.connection.db;
+          
+          if (!db) {
+            throw new Error("Database connection not available");
+          }
+          
+          const updateData: any = {
+            content: template.content,
+            description: template.description,
+            subject: template.subject,
+          };
+          
+          if (attachmentIdStrings !== undefined) {
+            updateData.attachments = attachmentIdStrings;
+          }
+          
+          // Use native MongoDB update to completely bypass Mongoose schema
+          await db.collection("emailtemplates").updateOne(
+            { name: "default" },
+            { $set: updateData }
+          );
+          
+          console.log("[Template API] Direct MongoDB update completed");
+          
+          // Reload the template to get the updated version
+          template = await EmailTemplateModel.findOne({ name: "default" });
+          if (!template) {
+            throw new Error("Failed to reload template after update");
+          }
+        } else {
+          throw saveError;
+        }
+      }
       console.log("[Template API] Template saved, attachments after save:", {
         count: template.attachments?.length || 0,
       });

@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type ApplicationStatus = "pending" | "sending" | "sent" | "error";
+type ApplicationStatus = "pending" | "sending" | "sent" | "error" | "cancelled";
 
 interface StatusFilterProps {
   statusFilter: Set<ApplicationStatus>;
@@ -20,14 +20,14 @@ export function StatusFilter({
   filteredCount,
   totalCount,
 }: StatusFilterProps) {
-  const allStatuses: ApplicationStatus[] = ["pending", "sending", "sent", "error"];
+  const allStatuses: ApplicationStatus[] = ["pending", "sending", "sent", "error", "cancelled"];
 
   return (
     <div className="mt-4 space-y-3">
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Filter by status</span>
-          {statusFilter.size < 4 && filteredCount !== undefined && totalCount !== undefined && (
+          {statusFilter.size < 5 && filteredCount !== undefined && totalCount !== undefined && (
             <span className="text-sm text-muted-foreground">
               Showing {filteredCount} of {totalCount}
             </span>
@@ -40,7 +40,7 @@ export function StatusFilter({
             onClick={onSelectAll}
             className={cn(
               "h-8 text-xs transition-all",
-              statusFilter.size === 4 
+              statusFilter.size === 5 
                 ? "bg-foreground text-background font-semibold hover:bg-foreground/90" 
                 : "text-muted-foreground"
             )}

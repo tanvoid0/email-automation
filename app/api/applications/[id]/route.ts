@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { ApplicationModel } from "@/lib/models/Application";
 import { AttachmentModel } from "@/lib/models/Attachment";
+import { EmailTemplateModel } from "@/lib/models/EmailTemplate";
 import { attachmentSchema } from "@/lib/validations/attachment";
 
 export const dynamic = "force-dynamic";
@@ -43,15 +44,6 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    console.log("[Applications API] PATCH request received:", {
-      id,
-      hasAttachments: body.attachments !== undefined,
-      attachmentsType: typeof body.attachments,
-      attachmentsIsArray: Array.isArray(body.attachments),
-      attachmentsLength: body.attachments?.length || 0,
-    });
-
-    // Find the application first
     const application = await ApplicationModel.findById(id);
     
     if (!application) {
@@ -62,50 +54,82 @@ export async function PATCH(
     }
 
     // Update fields
-    if (body.name !== undefined) application.name = body.name;
-    if (body.university !== undefined) application.university = body.university;
-    if (body.email !== undefined) application.email = body.email;
-    if (body.emailText !== undefined) application.emailText = body.emailText;
-    if (body.status !== undefined) application.status = body.status;
-    if (body.error !== undefined) application.error = body.error;
+    if (body.name !== undefined) application.name = body.name.trim();
+    if (body.university !== undefined) application.university = body.university.trim();
+    if (body.email !== undefined) application.email = body.email.trim();
+    if (body.emailText !== undefined) application.emailText = body.emailText.trim();
+    if (body.status !== undefined) {
+      application.status = body.status;
+      // Clear error fields when status is set to "sent"
+      if (body.status === "sent") {
+        application.error = undefined;
+        application.errorDetails = undefined;
+        application.markModified('errorDetails');
+      }
+    }
+    if (body.error !== undefined) {
+      // Allow explicitly setting error to null to clear it
+      application.error = body.error === null ? undefined : body.error;
+    }
+    if (body.errorDetails !== undefined) {
+      // Allow explicitly setting errorDetails to null to clear it
+      if (body.errorDetails === null) {
+        application.errorDetails = undefined;
+      } else {
+        application.errorDetails = body.errorDetails;
+      }
+      application.markModified('errorDetails');
+    }
     
-    // Handle attachments: if they're objects, create them first and get IDs
+    // Store old attachment IDs before update for cleanup
+    const oldAttachmentIds = application.attachments ? [...application.attachments] : [];
+
+    // Handle attachments: can be a mix of IDs (strings) and objects (new files)
+    // IDs are reused directly, objects are created/found by content
     if (body.attachments !== undefined) {
       if (Array.isArray(body.attachments) && body.attachments.length > 0) {
-        const firstAttachment = body.attachments[0];
-        if (typeof firstAttachment === 'object' && firstAttachment.filename) {
-          // Old format: create attachments and get IDs
-          const attachmentPromises = body.attachments.map((att: any) => {
+        const { findOrCreateAttachment } = await import("@/lib/utils/attachments");
+        
+        // Process each attachment - handle mix of IDs and objects
+        const attachmentPromises = body.attachments.map(async (att: any) => {
+          if (typeof att === 'string') {
+            // Already an ID - validate and use directly (no new creation)
+            if (/^[0-9a-fA-F]{24}$/.test(att.trim())) {
+              return att.trim();
+            }
+            return null; // Invalid ID format
+          } else if (typeof att === 'object' && att !== null && att.filename) {
+            // New file object - find or create (deduplicate by content)
             const validationResult = attachmentSchema.safeParse(att);
             if (!validationResult.success) {
               throw new Error(`Invalid attachment: ${validationResult.error.message}`);
             }
-            return AttachmentModel.create(validationResult.data);
-          });
-          const createdAttachments = await Promise.all(attachmentPromises);
-          application.attachments = createdAttachments.map(att => att._id.toString());
-        } else if (typeof firstAttachment === 'string') {
-          // New format: already IDs
-          application.attachments = body.attachments;
-        }
+            // Use findOrCreateAttachment to avoid duplicates
+            return await findOrCreateAttachment(AttachmentModel, validationResult.data);
+          }
+          return null; // Invalid format
+        });
+        
+        const resolvedIds = (await Promise.all(attachmentPromises)).filter((id): id is string => id !== null);
+        // Remove duplicates
+        application.attachments = Array.from(new Set(resolvedIds));
       } else {
         application.attachments = [];
       }
       application.markModified('attachments');
-      console.log("[Applications API] Setting attachments:", {
-        count: application.attachments.length,
-      });
     }
 
-    // Save the document to ensure Mongoose properly handles nested arrays
     await application.save();
-    
-    console.log("[Applications API] Application updated:", {
-      id: application._id,
-      hasAttachments: !!application.attachments,
-      attachmentsLength: application.attachments?.length || 0,
-    });
 
+    // Update attachment references
+    const newAttachmentIds = application.attachments || [];
+    const { syncApplicationAttachmentReferences, cleanupDanglingAttachments } = await import("@/lib/utils/attachments");
+    await syncApplicationAttachmentReferences(AttachmentModel, id, oldAttachmentIds, newAttachmentIds);
+
+    // Clean up dangling attachments after update (if attachments were removed)
+    if (oldAttachmentIds.length > 0) {
+      await cleanupDanglingAttachments(AttachmentModel, ApplicationModel, EmailTemplateModel);
+    }
     return NextResponse.json(application);
   } catch (error: any) {
     console.error("Error updating application:", error);
@@ -124,13 +148,33 @@ export async function DELETE(
   try {
     await connectDB();
     const { id } = await params;
-    const application = await ApplicationModel.findByIdAndDelete(id);
+    const application = await ApplicationModel.findById(id);
 
     if (!application) {
       return NextResponse.json(
         { error: "Application not found" },
         { status: 404 }
       );
+    }
+
+    // Store attachment IDs before deletion for cleanup
+    const attachmentIds = application.attachments || [];
+
+    // Remove references from attachments before deleting application
+    if (attachmentIds.length > 0) {
+      const { removeApplicationReference } = await import("@/lib/utils/attachments");
+      for (const attachmentId of attachmentIds) {
+        await removeApplicationReference(AttachmentModel, attachmentId, id);
+      }
+    }
+
+    // Delete the application
+    await ApplicationModel.findByIdAndDelete(id);
+
+    // Clean up dangling attachments (attachments not referenced by any other application or template)
+    if (attachmentIds.length > 0) {
+      const { cleanupDanglingAttachments } = await import("@/lib/utils/attachments");
+      await cleanupDanglingAttachments(AttachmentModel, ApplicationModel, EmailTemplateModel);
     }
 
     return NextResponse.json({ message: "Application deleted successfully" });
@@ -142,4 +186,3 @@ export async function DELETE(
     );
   }
 }
-

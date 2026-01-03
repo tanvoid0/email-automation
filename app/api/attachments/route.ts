@@ -20,7 +20,7 @@ export async function GET() {
   }
 }
 
-// POST create new attachment
+// POST create new attachment (only if it doesn't already exist)
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
@@ -39,7 +39,20 @@ export async function POST(request: NextRequest) {
     }
 
     const attachmentData = validationResult.data;
-    const attachment = await AttachmentModel.create(attachmentData);
+    
+    // Check if attachment already exists (by content - this is the unique identifier)
+    const { findOrCreateAttachment } = await import("@/lib/utils/attachments");
+    const attachmentId = await findOrCreateAttachment(AttachmentModel, attachmentData);
+    
+    // Fetch and return the attachment (existing or newly created)
+    const attachment = await AttachmentModel.findById(attachmentId);
+    
+    if (!attachment) {
+      return NextResponse.json(
+        { error: "Failed to create or find attachment" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(attachment, { status: 201 });
   } catch (error: any) {
