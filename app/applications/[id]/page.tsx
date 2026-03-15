@@ -10,6 +10,7 @@ import { ArrowLeft, Pencil, Mail, User, Building2, Send, CheckCircle2, XCircle, 
 import { Badge } from "@/components/ui/badge";
 import { AttachmentPreview } from "@/app/components/AttachmentPreview";
 import { useToast } from "@/lib/hooks/useToast";
+import { TIMEOUT_CONFIG } from "@/lib/config/timeouts";
 
 interface Application {
   _id: string;
@@ -61,7 +62,7 @@ export default function ViewApplicationPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Helper function for fetch with timeout
-  const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs: number = 30000) => {
+  const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs: number = TIMEOUT_CONFIG.HTTP_REQUEST) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     
@@ -253,6 +254,16 @@ export default function ViewApplicationPage() {
 
   const handleSendEmail = async () => {
     if (!application) return;
+
+    // Prevent sending if already sent
+    if (application.status === "sent") {
+      toast.error(`Email already sent to ${application.name}`, {
+        title: "Already Sent",
+        description: "This email has already been sent. To send again, please create a new application.",
+        persist: false,
+      });
+      return;
+    }
 
     setIsSending(true);
     // Update status to sending
@@ -461,7 +472,7 @@ export default function ViewApplicationPage() {
           },
           body: requestBodyString,
         },
-        30000 // 30 second timeout
+        TIMEOUT_CONFIG.HTTP_REQUEST
       );
 
       if (!response.ok) {
@@ -668,25 +679,6 @@ export default function ViewApplicationPage() {
                   <>
                     <RotateCw className="h-4 w-4 mr-2" />
                     Retry
-                  </>
-                )}
-              </Button>
-            )}
-            {application.status === "sent" && (
-              <Button
-                onClick={handleSendEmail}
-                disabled={isSending}
-                className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white"
-              >
-                {isSending ? (
-                  <>
-                    <Clock className="h-4 w-4 mr-2 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Resend
                   </>
                 )}
               </Button>

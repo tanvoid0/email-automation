@@ -11,6 +11,8 @@ import { Plus, Settings, Mail, Loader2, Paperclip } from "lucide-react";
 import { NotificationBell } from "./components/NotificationBell";
 import { EmailPreparationService } from "@/lib/services/EmailPreparationService";
 import { ApplicationStatusService } from "@/lib/services/ApplicationStatusService";
+import { removeQueueItemsByApplicationId } from "@/lib/utils/email-queue";
+import { TIMEOUT_CONFIG } from "@/lib/config/timeouts";
 import type { EmailQueueItem } from "@/lib/utils/email-queue";
 import type { ApplicationApiResponse, ApplicationAttachment, ErrorDetails } from "@/lib/types/application";
 import type { AttachmentApiResponse, ApiErrorResponse } from "@/lib/types/api";
@@ -25,7 +27,7 @@ export default function Home() {
   const emailQueue = useEmailQueue();
 
   // Helper function for fetch with timeout
-  const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs: number = 30000) => {
+  const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs: number = TIMEOUT_CONFIG.HTTP_REQUEST) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     
@@ -252,6 +254,15 @@ export default function Home() {
 
   const handleSendEmail = async (application: Application) => {
     try {
+      // Prevent sending if already sent
+      if (application.status === "sent") {
+        toast.error(`Email already sent to ${application.name}`, {
+          title: "Already Sent",
+          persist: false,
+        });
+        return;
+      }
+
       // Update status to sending
       setApplications(
         applications.map((p) =>
@@ -287,22 +298,45 @@ export default function Home() {
 
   const handleBulkSend = async (applicationIds: string[]) => {
     const applicationsToSend = applications.filter((p) => applicationIds.includes(p.id));
-    const total = applicationsToSend.length;
+    
+    // Filter out applications that are already sent
+    const unsentApplications = applicationsToSend.filter((app) => app.status !== "sent");
+    const sentCount = applicationsToSend.length - unsentApplications.length;
+    const total = unsentApplications.length;
+
+    // Warn if some applications were already sent
+    if (sentCount > 0) {
+      toast.error(
+        `${sentCount} application${sentCount > 1 ? "s have" : " has"} already been sent and ${sentCount > 1 ? "were" : "was"} skipped`,
+        {
+          title: "Some Applications Skipped",
+          persist: false,
+        }
+      );
+    }
+
+    // If no applications to send, return early
+    if (total === 0) {
+      if (sentCount === 0) {
+        toast.error("No applications selected to send");
+      }
+      return;
+    }
 
     try {
       // Update all to sending
-      const applicationIds = applicationsToSend.map((app) => app.id);
-      await ApplicationStatusService.updateMultipleStatuses(applicationIds, "sending");
+      const unsentApplicationIds = unsentApplications.map((app) => app.id);
+      await ApplicationStatusService.updateMultipleStatuses(unsentApplicationIds, "sending");
       
       // Update local state
       setApplications((prev) =>
         prev.map((p) =>
-          applicationIds.includes(p.id) ? { ...p, status: "sending" as const } : p
+          unsentApplicationIds.includes(p.id) ? { ...p, status: "sending" as const } : p
         )
       );
 
-      // Prepare email items and add to queue
-      const emailItems = await prepareEmailItems(applicationsToSend);
+      // Prepare email items and add to queue (only for unsent applications)
+      const emailItems = await prepareEmailItems(unsentApplications);
       await emailQueue.addToQueue(emailItems);
 
       toast.success(`Queued ${total} email(s) for sending`, {
@@ -328,6 +362,48 @@ export default function Home() {
     }
   };
 
+
+  const handleResetStatus = async (id: string) => {
+    try {
+      const application = applications.find((app) => app.id === id);
+      if (!application) {
+        toast.error("Application not found");
+        return;
+      }
+
+      // Only allow resetting from "sent" to "pending"
+      if (application.status !== "sent") {
+        toast.error("Can only reset applications with 'sent' status", {
+          title: "Invalid Status",
+          persist: false,
+        });
+        return;
+      }
+
+      // Remove any queue items for this application to prevent sync from reverting status
+      removeQueueItemsByApplicationId(id);
+
+      // Update status to pending
+      await updateApplicationStatus(id, "pending");
+      
+      // Update local state
+      setApplications((prev) =>
+        prev.map((app) =>
+          app.id === id ? { ...app, status: "pending" as const } : app
+        )
+      );
+
+      toast.success(`Status reset to pending for ${application.name}`, {
+        title: "Status Reset",
+        description: "You can now send this email again for testing purposes.",
+        persist: false,
+      });
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
+      console.error("Error resetting application status:", errorMessage);
+      toast.error(`Failed to reset status: ${errorMessage}`);
+    }
+  };
 
   const handleUpdateApplication = async (
     id: string,
@@ -489,6 +565,7 @@ export default function Home() {
           onSendEmail={handleSendEmail}
           onBulkSend={handleBulkSend}
           onRemove={handleRemove}
+          onResetStatus={handleResetStatus}
           onAttachmentsUpdated={loadApplications}
           isQueueProcessing={emailQueue.isProcessing}
         />

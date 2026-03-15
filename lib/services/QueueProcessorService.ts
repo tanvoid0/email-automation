@@ -13,6 +13,7 @@ import {
   type QueueState,
 } from "@/lib/utils/email-queue";
 import { ApplicationStatusService } from "./ApplicationStatusService";
+import { TIMEOUT_CONFIG } from "@/lib/config/timeouts";
 import type { ProcessQueueRequest, ProcessQueueResponse, ApiErrorResponse } from "@/lib/types/api";
 import { getErrorMessage } from "@/lib/types/errors";
 
@@ -31,6 +32,11 @@ export class QueueProcessorService {
     options: ProcessEmailOptions = {}
   ): Promise<boolean> {
     const { onProgress, signal } = options;
+    // Create a per-attempt id to guard against stale updates. Declared in outer scope
+    // so it's available in both try and catch blocks.
+    const attemptId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? (crypto as any).randomUUID()
+      : `attempt-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
     try {
       // Check if aborted
@@ -50,6 +56,21 @@ export class QueueProcessorService {
       // Update status to sending
       updateQueueItemStatus(item.id, 'sending', undefined, 'Sending email...');
       onProgress?.(item, 'sending');
+
+      // Sync application status in DB to 'sending' and clear any previous error (non-fatal)
+      try {
+        await ApplicationStatusService.markAsSending(item.applicationId, { attemptId });
+      } catch (dbError: unknown) {
+        const dbErrorMessage = getErrorMessage(dbError);
+        console.error('[QueueProcessorService] markAsSending failed (non-fatal):', {
+          itemId: item.id,
+          applicationId: item.applicationId,
+          attemptId,
+          dbError: dbErrorMessage,
+          timestamp: new Date().toISOString(),
+        });
+        // Continue sending even if DB sync fails; UI queue state remains authoritative
+      }
 
       // Send email via API
       const requestBody: ProcessQueueRequest = {
@@ -71,13 +92,14 @@ export class QueueProcessorService {
         attachmentIdsCount: item.attachmentIds.length,
         attachmentIds: item.attachmentIds,
         requestBodySize: JSON.stringify(requestBody).length,
+        attemptId,
         timestamp: new Date().toISOString(),
       });
 
       let response: Response;
       try {
-        // Create a timeout (30 seconds)
-        const timeoutMs = 30000;
+        // Create a timeout
+        const timeoutMs = TIMEOUT_CONFIG.QUEUE_PROCESSOR;
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => {
             reject(new Error(`Request timeout after ${timeoutMs}ms`));
@@ -178,12 +200,45 @@ export class QueueProcessorService {
         throw new Error('Invalid response from server');
       }
 
-      // Update status to sent
-      updateQueueItemStatus(item.id, 'sent');
+      // Update status to sent (definitive UI state)
+      updateQueueItemStatus(item.id, 'sent', undefined, 'Email sent. Finalizing status...');
       onProgress?.(item, 'sent');
 
-      // Update application status in database
-      await ApplicationStatusService.markAsSent(item.applicationId);
+      // Update application status in database (non-fatal)
+      // This must NOT flip the item back to error if it fails.
+      // Retry a few times with backoff, then give up silently (logged).
+      const maxAttempts = 3;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          await ApplicationStatusService.markAsSent(item.applicationId, { attemptId });
+          // Optionally tighten the status message once DB sync succeeds
+          updateQueueItemStatus(item.id, 'sent', undefined, 'Email sent');
+          break;
+        } catch (dbError: unknown) {
+          const dbErrorMessage = getErrorMessage(dbError);
+          const isStale = getErrorMessage(dbError) === 'STALE_ATTEMPT';
+          console.error('[QueueProcessorService] markAsSent failed (non-fatal):', {
+            itemId: item.id,
+            applicationId: item.applicationId,
+            attempt,
+            maxAttempts,
+            dbError: dbErrorMessage,
+            attemptId,
+            isStaleAttempt: isStale,
+            timestamp: new Date().toISOString(),
+          });
+          if (isStale) {
+            // Another newer attempt owns the finalization; stop retrying silently
+            break;
+          }
+          if (attempt < maxAttempts) {
+            // simple linear backoff: 500ms, 1000ms
+            await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+            continue;
+          }
+          // Give up after last attempt; keep item as 'sent'
+        }
+      }
 
       return true;
     } catch (error: unknown) {
@@ -205,12 +260,13 @@ export class QueueProcessorService {
       onProgress?.(item, 'error');
 
       // Update application status in database
-      await ApplicationStatusService.markAsError(item.applicationId, errorMessage).catch(
+      await ApplicationStatusService.markAsError(item.applicationId, errorMessage, undefined, { attemptId }).catch(
         (dbError: unknown) => {
           const dbErrorMessage = getErrorMessage(dbError);
           console.error('[QueueProcessorService] Failed to update application status:', {
             itemId: item.id,
             applicationId: item.applicationId,
+            attemptId,
             dbError: dbErrorMessage,
             timestamp: new Date().toISOString(),
           });

@@ -39,6 +39,7 @@ interface ApplicationListProps {
   onSendEmail: (application: Application) => Promise<void>;
   onBulkSend: (applicationIds: string[]) => Promise<void>;
   onRemove: (id: string) => void;
+  onResetStatus?: (id: string) => Promise<void>;
   onAttachmentsUpdated?: () => void;
   isQueueProcessing?: boolean;
 }
@@ -55,6 +56,7 @@ export function ApplicationList({
   onSendEmail,
   onBulkSend,
   onRemove,
+  onResetStatus,
   onAttachmentsUpdated,
   isQueueProcessing = false,
 }: ApplicationListProps) {
@@ -146,6 +148,16 @@ export function ApplicationList({
   };
 
   const toggleSelection = (id: string) => {
+    // Prevent selecting applications that are already sent
+    const application = applications.find((app) => app.id === id);
+    if (application?.status === "sent") {
+      toast.error("Cannot select applications that have already been sent", {
+        title: "Already Sent",
+        persist: false,
+      });
+      return;
+    }
+
     const newSelected = new Set(selectedIds);
     if (newSelected.has(id)) {
       newSelected.delete(id);
@@ -156,21 +168,25 @@ export function ApplicationList({
   };
 
   const toggleAll = () => {
-    const filteredIds = filteredApplications.map((p: Application) => p.id);
-    const allSelected = filteredIds.every((id: string) => selectedIds.has(id));
+    // Only select applications that are not sent
+    const selectableIds = filteredApplications
+      .filter((p: Application) => p.status !== "sent")
+      .map((p: Application) => p.id);
     
-    if (allSelected && filteredIds.length > 0) {
+    const allSelected = selectableIds.length > 0 && selectableIds.every((id: string) => selectedIds.has(id));
+    
+    if (allSelected) {
       // Deselect all filtered
       setSelectedIds((prev) => {
         const newSet = new Set(prev);
-        filteredIds.forEach((id: string) => newSet.delete(id));
+        selectableIds.forEach((id: string) => newSet.delete(id));
         return newSet;
       });
     } else {
-      // Select all filtered
+      // Select all filtered (excluding sent)
       setSelectedIds((prev) => {
         const newSet = new Set(prev);
-        filteredIds.forEach((id: string) => newSet.add(id));
+        selectableIds.forEach((id: string) => newSet.add(id));
         return newSet;
       });
     }
@@ -483,17 +499,21 @@ export function ApplicationList({
                   size="sm"
                   className="w-full sm:w-auto"
                 >
-                  {selectedIds.size === filteredApplications.length && filteredApplications.length > 0 ? (
-                    <>
-                      <CheckSquare className="h-4 w-4 mr-2" />
-                      Deselect All
-                    </>
-                  ) : (
-                    <>
-                      <Square className="h-4 w-4 mr-2" />
-                      Select All
-                    </>
-                  )}
+                  {(() => {
+                    const selectableCount = filteredApplications.filter((p: Application) => p.status !== "sent").length;
+                    const allSelected = selectableCount > 0 && selectedIds.size === selectableCount;
+                    return allSelected ? (
+                      <>
+                        <CheckSquare className="h-4 w-4 mr-2" />
+                        Deselect All
+                      </>
+                    ) : (
+                      <>
+                        <Square className="h-4 w-4 mr-2" />
+                        Select All Unsent
+                      </>
+                    );
+                  })()}
                 </Button>
                 {unsentApplicationIds.length > 0 && (
                   <Button
@@ -640,7 +660,12 @@ export function ApplicationList({
               <TableRow>
                 <TableHead className="w-12">
                   <Checkbox
-                    checked={selectedIds.size === filteredApplications.length && filteredApplications.length > 0}
+                    checked={
+                      (() => {
+                        const selectableCount = filteredApplications.filter((p: Application) => p.status !== "sent").length;
+                        return selectableCount > 0 && selectedIds.size === selectableCount;
+                      })()
+                    }
                     onCheckedChange={toggleAll}
                   />
                 </TableHead>
@@ -664,7 +689,7 @@ export function ApplicationList({
                     <Checkbox
                       checked={selectedIds.has(application.id)}
                       onCheckedChange={() => toggleSelection(application.id)}
-                      disabled={application.status === "sending"}
+                      disabled={application.status === "sending" || application.status === "sent"}
                     />
                   </TableCell>
                   <TableCell className="font-medium">
@@ -731,15 +756,15 @@ export function ApplicationList({
                           <RotateCw className="h-4 w-4" />
                         </Button>
                       )}
-                      {application.status === "sent" && (
+                      {application.status === "sent" && onResetStatus && (
                         <Button
-                          onClick={() => onSendEmail(application)}
+                          onClick={() => onResetStatus(application.id)}
                           size="sm"
                           variant="outline"
-                          title="Resend email"
-                          className="h-8 w-8 p-0 border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:hover:bg-purple-950/30"
+                          title="Reset status to pending (for testing)"
+                          className="h-8 w-8 p-0 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
                         >
-                          <RefreshCw className="h-4 w-4" />
+                          <RotateCw className="h-4 w-4" />
                         </Button>
                       )}
                       <Button
@@ -796,11 +821,20 @@ export function ApplicationList({
           {filteredApplications.length > 0 && (
             <div className="flex items-center gap-2 pb-2 border-b">
               <Checkbox
-                checked={selectedIds.size === filteredApplications.length && filteredApplications.length > 0}
+                checked={
+                  (() => {
+                    const selectableCount = filteredApplications.filter((p: Application) => p.status !== "sent").length;
+                    return selectableCount > 0 && selectedIds.size === selectableCount;
+                  })()
+                }
                 onCheckedChange={toggleAll}
               />
               <label className="text-sm font-medium cursor-pointer" onClick={toggleAll}>
-                Select All ({filteredApplications.length})
+                {(() => {
+                  const selectableCount = filteredApplications.filter((p: Application) => p.status !== "sent").length;
+                  const allSelected = selectableCount > 0 && selectedIds.size === selectableCount;
+                  return allSelected ? `Deselect All` : `Select All Unsent (${selectableCount})`;
+                })()}
               </label>
             </div>
           )}
@@ -888,14 +922,14 @@ export function ApplicationList({
                       Retry
                     </Button>
                   )}
-                  {application.status === "sent" && (
+                  {application.status === "sent" && onResetStatus && (
                     <Button
-                      onClick={() => onSendEmail(application)}
+                      onClick={() => onResetStatus(application.id)}
                       size="sm"
-                      className="bg-purple-600 hover:bg-purple-700 text-white text-xs"
+                      className="bg-amber-600 hover:bg-amber-700 text-white text-xs"
                     >
-                      <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                      Resend
+                      <RotateCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                      Reset
                     </Button>
                   )}
                   <Button

@@ -100,10 +100,21 @@ export function getQueue(): QueueState {
       
       // Ensure batch size is current
       const batchSize = getBatchSize();
-      return {
+      const q = {
         ...parsed,
         batchSize,
       };
+      // lightweight trace
+      // Note: avoid logging entire queue items to keep console readable
+      console.debug('[EmailQueue] getQueue restored from storage:', {
+        itemsCount: q.items?.length ?? 0,
+        batchSize: q.batchSize,
+        currentBatch: q.currentBatch,
+        isProcessing: q.isProcessing,
+        currentItemIndex: q.currentItemIndex,
+        timestamp: new Date().toISOString(),
+      });
+      return q;
     }
   } catch (error) {
     console.warn('[EmailQueue] Failed to read queue from localStorage:', error);
@@ -177,18 +188,61 @@ export function updateQueueItemStatus(
   const item = queue.items.find(i => i.id === itemId);
   
   if (item) {
+    const prev = { 
+      status: item.status, 
+      error: item.error, 
+      currentStatusMessage: item.currentStatusMessage,
+      processedAt: item.processedAt,
+    };
+
+    console.log('[EmailQueue] updateQueueItemStatus called:', {
+      itemId,
+      fromStatus: item.status,
+      toStatus: status,
+      incomingError: error,
+      incomingStatusMessage: statusMessage,
+      timestamp: new Date().toISOString(),
+    });
+
     item.status = status;
-    if (error) {
-      item.error = error;
+    // Error handling semantics:
+    // - If caller provides `error` (even empty string), set it explicitly.
+    // - If no error provided and status is not 'error', clear any previous error.
+    if (error !== undefined) {
+      item.error = error || undefined;
+    } else if (status !== 'error') {
+      item.error = undefined;
     }
-    if (statusMessage) {
-      item.currentStatusMessage = statusMessage;
+    // Status message semantics:
+    // - Only update when caller provides a value (including empty string to clear).
+    if (statusMessage !== undefined) {
+      item.currentStatusMessage = statusMessage || undefined;
     }
     if (status === 'sent' || status === 'error') {
       item.processedAt = new Date().toISOString();
     }
     
     persistQueue(queue);
+
+    console.log('[EmailQueue] updateQueueItemStatus persisted:', {
+      itemId,
+      prev,
+      next: {
+        status: item.status,
+        error: item.error,
+        currentStatusMessage: item.currentStatusMessage,
+        processedAt: item.processedAt,
+      },
+      queueCurrentItemIndex: queue.currentItemIndex,
+      timestamp: new Date().toISOString(),
+    });
+  }
+  else {
+    console.warn('[EmailQueue] updateQueueItemStatus: item not found in queue', {
+      itemId,
+      desiredStatus: status,
+      timestamp: new Date().toISOString(),
+    });
   }
 }
 
@@ -212,6 +266,9 @@ export function getNextBatch(): EmailQueueItem[] {
  */
 export function markBatchAsProcessing(itemIds: string[]): void {
   const queue = getQueue();
+  const beforeStatuses = queue.items
+    .filter(item => itemIds.includes(item.id))
+    .map(item => ({ id: item.id, prevStatus: item.status }));
   
   queue.items = queue.items.map(item => {
     if (itemIds.includes(item.id)) {
@@ -222,6 +279,16 @@ export function markBatchAsProcessing(itemIds: string[]): void {
   
   queue.isProcessing = true;
   persistQueue(queue);
+
+  console.log('[EmailQueue] markBatchAsProcessing:', {
+    itemIds,
+    count: itemIds.length,
+    beforeStatuses,
+    afterStatuses: queue.items
+      .filter(item => itemIds.includes(item.id))
+      .map(item => ({ id: item.id, status: item.status })),
+    timestamp: new Date().toISOString(),
+  });
 }
 
 /**
@@ -243,6 +310,11 @@ export function cleanupCompletedItems(): void {
   });
   
   persistQueue(queue);
+
+  console.log('[EmailQueue] cleanupCompletedItems executed:', {
+    remainingItems: queue.items.length,
+    timestamp: new Date().toISOString(),
+  });
 }
 
 /**
@@ -254,6 +326,17 @@ export function clearCompletedItems(): void {
   queue.items = queue.items.filter(item => 
     item.status !== 'sent' && item.status !== 'error'
   );
+  
+  persistQueue(queue);
+}
+
+/**
+ * Remove queue items by application ID
+ */
+export function removeQueueItemsByApplicationId(applicationId: string): void {
+  const queue = getQueue();
+  
+  queue.items = queue.items.filter(item => item.applicationId !== applicationId);
   
   persistQueue(queue);
 }

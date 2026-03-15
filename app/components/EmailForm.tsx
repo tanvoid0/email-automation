@@ -214,6 +214,7 @@ export function EmailForm({
   const emailText = watch("emailText");
   const professorName = watch("name");
   const universityName = watch("university");
+  const professorEmail = watch("email");
 
   const fillMockData = () => {
     const mockNames = [
@@ -260,9 +261,16 @@ export function EmailForm({
     const randomDomain = mockDomains[Math.floor(Math.random() * mockDomains.length)];
     const randomEmail = `${randomName.split(" ")[0].toLowerCase()}${Math.floor(Math.random() * 100)}@${randomDomain}`;
 
-    setValue("name", randomName);
-    setValue("university", randomUniversity);
-    setValue("email", randomEmail);
+    // Only fill fields that are empty
+    if (!professorName || professorName.trim() === "") {
+      setValue("name", randomName);
+    }
+    if (!universityName || universityName.trim() === "") {
+      setValue("university", randomUniversity);
+    }
+    if (!professorEmail || professorEmail.trim() === "") {
+      setValue("email", randomEmail);
+    }
   };
 
   const handleCustomize = async () => {
@@ -479,6 +487,16 @@ export function EmailForm({
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="flex justify-end pb-2">
+            <Button
+              type="button"
+              onClick={fillMockData}
+              variant="outline"
+              className="text-xs border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300"
+            >
+              Fill Mock Data
+            </Button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField label="Recipient Name" error={errors.name?.message}>
               <Input
@@ -540,14 +558,6 @@ export function EmailForm({
             universityName={universityName}
           />
           <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
-            <Button
-              type="button"
-              onClick={fillMockData}
-              variant="outline"
-              className="text-xs w-full sm:w-auto border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300"
-            >
-              Fill Mock Data
-            </Button>
             <Button
               type="button"
               onClick={handleCustomize}

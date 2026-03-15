@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/smtp";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
+import { TIMEOUT_CONFIG } from "@/lib/config/timeouts";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30; // 30 seconds - allows time for SMTP operations and attachment fetching
@@ -47,8 +48,8 @@ export async function GET() {
   }
 
   try {
-    // Increased timeout to 60 seconds for test emails (allows more time for slow connections)
-    const timeoutMs = parseInt(process.env.SMTP_TEST_TIMEOUT || "60000");
+    // Increased timeout for test emails (allows more time for slow connections)
+    const timeoutMs = TIMEOUT_CONFIG.SMTP_TEST;
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error(`Request timeout after ${timeoutMs / 1000} seconds`)), timeoutMs);
     });
@@ -90,9 +91,10 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  // Set a timeout for the entire request (25 seconds)
+  // Set a timeout for the entire request
+  const timeoutMs = TIMEOUT_CONFIG.EMAIL_API_REQUEST;
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error("Request timeout after 25 seconds")), 25000);
+    setTimeout(() => reject(new Error(`Request timeout after ${timeoutMs / 1000} seconds`)), timeoutMs);
   });
 
   try {

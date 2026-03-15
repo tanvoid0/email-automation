@@ -60,6 +60,13 @@ export class Application {
     default: []
   })
   public attachments?: string[]; // Array of attachment IDs
+
+  // Concurrency and attempt scoping helpers
+  @prop({ required: false })
+  public lastAttemptId?: string; // The most recent attempt that is allowed to finalize status
+
+  @prop({ required: false, default: 0 })
+  public statusVersion?: number; // Incremented on each status change
 }
 
 // Proper model initialization for Next.js with hot reloading

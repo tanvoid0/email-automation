@@ -18,7 +18,9 @@
 
 # misc
 .DS_Store
+.cursor
 *.pem
+.idea/
 
 # debug
 npm-debug.log*

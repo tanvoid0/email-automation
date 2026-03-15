@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import type { SendEmailOptions, SendEmailResult, EmailAttachment } from "@/lib/types/smtp";
 import { getErrorMessage } from "@/lib/types/errors";
+import { TIMEOUT_CONFIG } from "@/lib/config/timeouts";
 
 const smtpConfig = {
   host: process.env.SMTP_HOST,
@@ -11,12 +12,12 @@ const smtpConfig = {
     user: process.env.SMTP_USER?.trim(),
     pass: process.env.SMTP_PASS?.trim(), // Trim any whitespace that might cause issues
   },
-  // Connection timeout (in milliseconds) - default 30 seconds (increased for slow connections)
-  connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT || "30000"),
-  // Socket timeout (in milliseconds) - default 30 seconds (increased for slow connections)
-  socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT || "30000"),
-  // Greeting timeout (in milliseconds) - default 10 seconds (increased)
-  greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT || "10000"),
+  // Connection timeout (in milliseconds)
+  connectionTimeout: TIMEOUT_CONFIG.SMTP_CONNECTION,
+  // Socket timeout (in milliseconds)
+  socketTimeout: TIMEOUT_CONFIG.SMTP_SOCKET,
+  // Greeting timeout (in milliseconds)
+  greetingTimeout: TIMEOUT_CONFIG.SMTP_GREETING,
   // Additional options for university email servers
   tls: {
     // Do not fail on invalid certificates (some university servers use self-signed certs)
@@ -145,6 +146,33 @@ export async function sendEmail({
         }
       } else if (error.code === "ECONNREFUSED") {
         throw new Error(`Cannot connect to SMTP server. Please check SMTP_HOST and SMTP_PORT settings.`);
+      } else if (error.code === "EENVELOPE" || error.code === "EMESSAGE") {
+        // Invalid email address or envelope error
+        const responseMessage = error.response || error.message || "";
+        const isInvalidAddress = 
+          responseMessage.toLowerCase().includes("invalid") ||
+          responseMessage.toLowerCase().includes("address") ||
+          responseMessage.toLowerCase().includes("recipient") ||
+          responseMessage.toLowerCase().includes("550") || // Mailbox unavailable
+          responseMessage.toLowerCase().includes("551") || // User not local
+          responseMessage.toLowerCase().includes("553");   // Mailbox name not allowed
+        
+        if (isInvalidAddress) {
+          throw new Error(`Invalid email address: ${to}. Please check the recipient email address.`);
+        }
+      }
+      
+      // Check for invalid email address in response message (common SMTP error codes)
+      const responseMessage = error.response || error.message || "";
+      if (
+        responseMessage.includes("550") || // Mailbox unavailable
+        responseMessage.includes("551") || // User not local
+        responseMessage.includes("553") || // Mailbox name not allowed
+        responseMessage.toLowerCase().includes("invalid recipient") ||
+        responseMessage.toLowerCase().includes("user unknown") ||
+        responseMessage.toLowerCase().includes("mailbox does not exist")
+      ) {
+        throw new Error(`Invalid email address: ${to}. The recipient email address does not exist or is invalid.`);
       }
     }
     

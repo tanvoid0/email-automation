@@ -54,18 +54,44 @@ export async function PATCH(
     }
 
     // Update fields
+    const attemptId: string | undefined = body.attemptId;
+    const isStatusUpdate = body.status !== undefined;
+
     if (body.name !== undefined) application.name = body.name.trim();
     if (body.university !== undefined) application.university = body.university.trim();
     if (body.email !== undefined) application.email = body.email.trim();
     if (body.emailText !== undefined) application.emailText = body.emailText.trim();
-    if (body.status !== undefined) {
-      application.status = body.status;
-      // Clear error fields when status is set to "sent"
-      if (body.status === "sent") {
+    if (isStatusUpdate) {
+      const nextStatus = body.status as typeof application.status;
+
+      // Guard against stale attempts when finalizing status
+      if ((nextStatus === "sent" || nextStatus === "error") && application.lastAttemptId && attemptId && attemptId !== application.lastAttemptId) {
+        return new NextResponse(
+          `Stale attempt: attemptId ${attemptId} does not match lastAttemptId ${application.lastAttemptId}`,
+          { status: 409 }
+        );
+      }
+
+      application.status = nextStatus;
+
+      if (nextStatus === "sending") {
+        // When moving to sending, clear any old errors and record the active attempt
+        application.error = undefined;
+        application.errorDetails = undefined;
+        application.markModified('errorDetails');
+        if (attemptId) {
+          application.lastAttemptId = attemptId;
+        }
+      }
+
+      if (nextStatus === "sent") {
         application.error = undefined;
         application.errorDetails = undefined;
         application.markModified('errorDetails');
       }
+
+      // Increment status version on any status update
+      application.statusVersion = (application.statusVersion || 0) + 1;
     }
     if (body.error !== undefined) {
       // Allow explicitly setting error to null to clear it
