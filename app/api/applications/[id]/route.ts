@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import { ApplicationModel } from "@/lib/models/Application";
+import {
+  WorkspaceApplicationModel,
+  WORKSPACE_KIND_EMAIL,
+} from "@/lib/models/WorkspaceApplication";
 import { AttachmentModel } from "@/lib/models/Attachment";
 import { EmailTemplateModel } from "@/lib/models/EmailTemplate";
 import { attachmentSchema } from "@/lib/validations/attachment";
@@ -15,8 +18,11 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
-    const application = await ApplicationModel.findById(id);
-    
+    const application = await WorkspaceApplicationModel.findOne({
+      _id: id,
+      kind: WORKSPACE_KIND_EMAIL,
+    });
+
     if (!application) {
       return NextResponse.json(
         { error: "Application not found" },
@@ -44,8 +50,11 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const application = await ApplicationModel.findById(id);
-    
+    const application = await WorkspaceApplicationModel.findOne({
+      _id: id,
+      kind: WORKSPACE_KIND_EMAIL,
+    });
+
     if (!application) {
       return NextResponse.json(
         { error: "Application not found" },
@@ -154,7 +163,7 @@ export async function PATCH(
 
     // Clean up dangling attachments after update (if attachments were removed)
     if (oldAttachmentIds.length > 0) {
-      await cleanupDanglingAttachments(AttachmentModel, ApplicationModel, EmailTemplateModel);
+      await cleanupDanglingAttachments(AttachmentModel, WorkspaceApplicationModel, EmailTemplateModel);
     }
     return NextResponse.json(application);
   } catch (error: any) {
@@ -174,7 +183,10 @@ export async function DELETE(
   try {
     await connectDB();
     const { id } = await params;
-    const application = await ApplicationModel.findById(id);
+    const application = await WorkspaceApplicationModel.findOne({
+      _id: id,
+      kind: WORKSPACE_KIND_EMAIL,
+    });
 
     if (!application) {
       return NextResponse.json(
@@ -195,12 +207,15 @@ export async function DELETE(
     }
 
     // Delete the application
-    await ApplicationModel.findByIdAndDelete(id);
+    await WorkspaceApplicationModel.findOneAndDelete({
+      _id: id,
+      kind: WORKSPACE_KIND_EMAIL,
+    });
 
     // Clean up dangling attachments (attachments not referenced by any other application or template)
     if (attachmentIds.length > 0) {
       const { cleanupDanglingAttachments } = await import("@/lib/utils/attachments");
-      await cleanupDanglingAttachments(AttachmentModel, ApplicationModel, EmailTemplateModel);
+      await cleanupDanglingAttachments(AttachmentModel, WorkspaceApplicationModel, EmailTemplateModel);
     }
 
     return NextResponse.json({ message: "Application deleted successfully" });

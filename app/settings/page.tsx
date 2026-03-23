@@ -25,6 +25,7 @@ import { Attachment, fileToAttachment } from "@/lib/utils/attachments";
 import { useTemplate } from "@/lib/hooks/useTemplate";
 import { useEmailQueue } from "@/lib/hooks/useEmailQueue";
 import { cn } from "@/lib/utils";
+import { AdmissionSettingsCard } from "@/components/settings/AdmissionSettingsCard";
 
 interface TemplateFormData {
   content: string;
@@ -546,6 +547,11 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <AdmissionSettingsCard
+          alternateSettingsHref="/admissions/settings"
+          alternateSettingsLabel="Open admission settings page"
+        />
 
         {/* Personal Profile Section */}
         <Card>

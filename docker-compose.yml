@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
       args:
         - NODE_VERSION=24-alpine
-    image: email-automation:latest
+    image: grad-buddy:latest
     ports:
       - "3000:3000"
     env_file:

@@ -22,6 +22,33 @@ export interface AIGenerateResponse {
   text: string;
 }
 
+/**
+ * Same as generateAIResponse but does not strip markdown code fences (needed for JSON payloads).
+ */
+export async function generateAIResponseRaw(
+  request: AIGenerateRequest
+): Promise<AIGenerateResponse> {
+  const genAI = getGenAI();
+  const rawEnvModel = process.env.GEMINI_MODEL;
+  const envModel = rawEnvModel?.trim();
+  const requestModel = request.model?.trim();
+  let modelName: string;
+  if (requestModel && requestModel.length > 0) {
+    modelName = requestModel;
+  } else if (envModel && envModel.length > 0) {
+    modelName = envModel;
+  } else {
+    throw new Error(
+      "GEMINI_MODEL is not configured. Please set GEMINI_MODEL in your .env.local file or provide a model in the request."
+    );
+  }
+  const model = genAI.getGenerativeModel({ model: modelName });
+  const result = await model.generateContent(request.prompt);
+  const response = await result.response;
+  const generatedText = response.text();
+  return { text: generatedText.trim() };
+}
+
 export async function generateAIResponse(
   request: AIGenerateRequest
 ): Promise<AIGenerateResponse> {

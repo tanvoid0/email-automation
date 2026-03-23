@@ -51,15 +51,16 @@ export function formatFileSize(bytes: number): string {
  */
 export async function findDanglingAttachments(
   AttachmentModel: any,
-  ApplicationModel: any,
+  /** Unified workspace model (`WorkspaceApplicationModel`) — all kinds share `attachments`. */
+  WorkspaceApplicationModel: any,
   EmailTemplateModel?: any
 ): Promise<string[]> {
   // Get all attachment IDs
   const allAttachments = await AttachmentModel.find({}, '_id').lean();
   const allAttachmentIds = new Set(allAttachments.map((att: any) => att._id.toString()));
 
-  // Get all attachment IDs referenced by applications
-  const applications = await ApplicationModel.find({}, 'attachments').lean();
+  // Get all attachment IDs referenced by workspace applications (email + admission)
+  const applications = await WorkspaceApplicationModel.find({}, "attachments").lean();
   const referencedByApplications = new Set<string>();
   applications.forEach((app: any) => {
     if (app.attachments && Array.isArray(app.attachments)) {
@@ -99,10 +100,14 @@ export async function findDanglingAttachments(
  */
 export async function cleanupDanglingAttachments(
   AttachmentModel: any,
-  ApplicationModel: any,
+  WorkspaceApplicationModel: any,
   EmailTemplateModel?: any
 ): Promise<{ deletedCount: number; deletedIds: string[] }> {
-  const danglingIds = await findDanglingAttachments(AttachmentModel, ApplicationModel, EmailTemplateModel);
+  const danglingIds = await findDanglingAttachments(
+    AttachmentModel,
+    WorkspaceApplicationModel,
+    EmailTemplateModel
+  );
   
   if (danglingIds.length === 0) {
     return { deletedCount: 0, deletedIds: [] };
@@ -294,12 +299,12 @@ export async function syncTemplateAttachmentReferences(
  */
 export async function cleanupInvalidAttachmentReferences(
   AttachmentModel: any,
-  ApplicationModel: any,
+  WorkspaceApplicationModel: any,
   EmailTemplateModel?: any
-): Promise<{ 
-  applicationsCleaned: number; 
-  templatesCleaned: number; 
-  removedIds: string[] 
+): Promise<{
+  applicationsCleaned: number;
+  templatesCleaned: number;
+  removedIds: string[];
 }> {
   // Get all valid attachment IDs
   const allAttachments = await AttachmentModel.find({}, '_id').lean();
@@ -309,8 +314,10 @@ export async function cleanupInvalidAttachmentReferences(
   let templatesCleaned = 0;
   const removedIds: string[] = [];
 
-  // Clean up applications
-  const applications = await ApplicationModel.find({ attachments: { $exists: true, $ne: [] } }).lean();
+  // Clean up workspace applications (email + admission)
+  const applications = await WorkspaceApplicationModel.find({
+    attachments: { $exists: true, $ne: [] },
+  }).lean();
   for (const app of applications) {
     if (app.attachments && Array.isArray(app.attachments)) {
       const validIds = app.attachments.filter((id: any) => {
@@ -326,7 +333,7 @@ export async function cleanupInvalidAttachmentReferences(
         }).map((id: any) => id.toString());
         
         removedIds.push(...invalidIds);
-        await ApplicationModel.findByIdAndUpdate(app._id, {
+        await WorkspaceApplicationModel.findByIdAndUpdate(app._id, {
           $set: { attachments: validIds }
         });
         applicationsCleaned++;

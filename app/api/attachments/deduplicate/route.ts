@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
-import { ApplicationModel } from "@/lib/models/Application";
+import { WorkspaceApplicationModel } from "@/lib/models/WorkspaceApplication";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +54,7 @@ export async function POST() {
     let updatedApplications = 0;
     for (const { keep, remove } of duplicates) {
       // Find all applications that reference any of the duplicate attachments
-      const applications = await ApplicationModel.find({
+      const applications = await WorkspaceApplicationModel.find({
         attachments: { $in: remove }
       });
       

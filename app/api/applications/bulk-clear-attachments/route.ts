@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import { ApplicationModel } from "@/lib/models/Application";
+import {
+  WorkspaceApplicationModel,
+  WORKSPACE_KIND_EMAIL,
+} from "@/lib/models/WorkspaceApplication";
 import { AttachmentModel } from "@/lib/models/Attachment";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +27,10 @@ export async function POST(request: NextRequest) {
     // Update all applications
     const updateResults = await Promise.all(
       applicationIds.map(async (applicationId: string) => {
-        const application = await ApplicationModel.findById(applicationId);
+        const application = await WorkspaceApplicationModel.findOne({
+          _id: applicationId,
+          kind: WORKSPACE_KIND_EMAIL,
+        });
         
         if (!application) {
           return { id: applicationId, success: false, error: "Application not found" };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { toast as sonnerToast } from "sonner";
 import type { NotificationType, NotificationMetadata } from "@/lib/types/notification";
 
@@ -67,7 +67,7 @@ export function useToast() {
     []
   );
 
-  const toast = {
+  const toastMethods = {
     success: useCallback(
       async (message: string, options?: ToastOptions) => {
         await createNotificationIfNeeded("success", message, options);
@@ -108,14 +108,24 @@ export function useToast() {
       },
       [createNotificationIfNeeded]
     ),
-    // Pass through other sonner methods
-    promise: sonnerToast.promise,
-    loading: sonnerToast.loading,
-    custom: sonnerToast.custom,
-    dismiss: sonnerToast.dismiss,
-    message: sonnerToast.message,
   };
 
-  return toast;
+  // Stable reference so consumers can safely list `toast` in effect deps (new inline object each render caused infinite loops).
+  return useMemo(
+    () => ({
+      ...toastMethods,
+      promise: sonnerToast.promise,
+      loading: sonnerToast.loading,
+      custom: sonnerToast.custom,
+      dismiss: sonnerToast.dismiss,
+      message: sonnerToast.message,
+    }),
+    [
+      toastMethods.success,
+      toastMethods.error,
+      toastMethods.warning,
+      toastMethods.info,
+    ]
+  );
 }
 

@@ -29,6 +29,8 @@ export interface ApplicationAttachment {
  */
 export interface ApplicationApiResponse {
   _id: string;
+  /** Unified store discriminator — always `email_outreach` for this API */
+  kind?: "email_outreach";
   name: string;
   university: string;
   email: string;

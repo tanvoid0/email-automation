@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
-import { ApplicationModel } from "@/lib/models/Application";
+import { WorkspaceApplicationModel } from "@/lib/models/WorkspaceApplication";
 import { EmailTemplateModel } from "@/lib/models/EmailTemplate";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,10 @@ export async function GET() {
       .allowDiskUse(true);
     
     // Get all applications
-    const applications = await ApplicationModel.find({}, '_id name email attachments').lean();
+    const applications = await WorkspaceApplicationModel.find(
+      {},
+      "_id name email attachments kind universityName"
+    ).lean();
     
     // Get template (there's only one default template)
     const template = await EmailTemplateModel.findOne({ name: "default" }).lean();

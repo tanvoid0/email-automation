@@ -5,6 +5,7 @@ import { sendEmail } from "@/lib/smtp";
 import type { ProcessQueueRequest, ProcessQueueResponse, ApiErrorResponse } from "@/lib/types/api";
 import type { EmailAttachment } from "@/lib/types/smtp";
 import { getErrorMessage } from "@/lib/types/errors";
+import { APP_MOCK_EMAIL_DOMAIN } from "@/lib/constants/app";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes for batch processing
@@ -164,7 +165,7 @@ export async function PUT(request: NextRequest) {
       
       const mockResponse: ProcessQueueResponse = {
         success: true,
-        messageId: `mock-${Date.now()}@email-automation.local`,
+        messageId: `mock-${Date.now()}@${APP_MOCK_EMAIL_DOMAIN}`,
         mocked: true,
         itemId,
       };

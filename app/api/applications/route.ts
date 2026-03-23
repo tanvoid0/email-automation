@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import { ApplicationModel } from "@/lib/models/Application";
+import {
+  WorkspaceApplicationModel,
+  WORKSPACE_KIND_EMAIL,
+} from "@/lib/models/WorkspaceApplication";
 import { AttachmentModel } from "@/lib/models/Attachment";
 import { applicationSchema } from "@/lib/validations/application";
 import { attachmentSchema } from "@/lib/validations/attachment";
@@ -13,7 +16,9 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     await connectDB();
-    const applications = await ApplicationModel.find().sort({ createdAt: -1 });
+    const applications = await WorkspaceApplicationModel.find({
+      kind: WORKSPACE_KIND_EMAIL,
+    }).sort({ createdAt: -1 });
     return NextResponse.json(applications);
   } catch (error: unknown) {
     const errorMessage = getErrorMessage(error);
@@ -83,7 +88,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Create application
-    const application = await ApplicationModel.create({
+    const application = await WorkspaceApplicationModel.create({
+      kind: WORKSPACE_KIND_EMAIL,
       name: body.name.trim(),
       university: body.university.trim(),
       email: body.email.trim(),
@@ -91,9 +97,6 @@ export async function POST(request: NextRequest) {
       attachments: attachmentIds,
       status: body.status || "pending",
     });
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/31dfd13d-d6ba-47a9-b401-873d783b3ca8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/applications/route.ts:84',message:'Application created with attachments',data:{applicationId:application._id.toString(),attachments:application.attachments,attachmentsCount:application.attachments?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
 
     // Update attachment references
     if (attachmentIds.length > 0) {
@@ -108,7 +111,7 @@ export async function POST(request: NextRequest) {
     // Handle MongoDB duplicate key error (E11000) - if unique index still exists, provide helpful message
     if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
       const errorResponse: ApiErrorResponse = {
-        error: "A unique index on the email field still exists in the database. Please drop the 'email_1' index from the 'applications' collection to allow duplicate emails.",
+        error: "A unique index on the email field still exists in the database. Please drop the conflicting index from the 'workspace_applications' collection to allow duplicate emails.",
       };
       return NextResponse.json(errorResponse, { status: 500 });
     }

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import { ApplicationModel } from "@/lib/models/Application";
+import {
+  WorkspaceApplicationModel,
+  WORKSPACE_KIND_EMAIL,
+} from "@/lib/models/WorkspaceApplication";
 import type { ApiErrorResponse } from "@/lib/types/api";
 import { getErrorMessage } from "@/lib/types/errors";
 
@@ -15,7 +18,10 @@ export async function POST(request: NextRequest) {
     await connectDB();
     
     // Find all applications stuck in "sending" status
-    const stuckApplications = await ApplicationModel.find({ status: "sending" });
+    const stuckApplications = await WorkspaceApplicationModel.find({
+      kind: WORKSPACE_KIND_EMAIL,
+      status: "sending",
+    });
     
     if (stuckApplications.length === 0) {
       return NextResponse.json({
@@ -26,8 +32,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Update all stuck applications to "cancelled" status and clear errors
-    const updateResult = await ApplicationModel.updateMany(
-      { status: "sending" },
+    const updateResult = await WorkspaceApplicationModel.updateMany(
+      { kind: WORKSPACE_KIND_EMAIL, status: "sending" },
       { 
         $set: { 
           status: "cancelled",
@@ -66,7 +72,10 @@ export async function GET() {
   try {
     await connectDB();
     
-    const stuckApplications = await ApplicationModel.find({ status: "sending" });
+    const stuckApplications = await WorkspaceApplicationModel.find({
+      kind: WORKSPACE_KIND_EMAIL,
+      status: "sending",
+    });
     
     return NextResponse.json({
       stuckCount: stuckApplications.length,

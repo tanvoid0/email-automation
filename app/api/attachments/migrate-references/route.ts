@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
-import { ApplicationModel } from "@/lib/models/Application";
+import { WorkspaceApplicationModel } from "@/lib/models/WorkspaceApplication";
 import { EmailTemplateModel } from "@/lib/models/EmailTemplate";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +60,7 @@ export async function POST() {
     }
     
     // Step 2: Populate attachment reference fields from applications
-    const applications = await ApplicationModel.find({}, '_id attachments').lean();
+    const applications = await WorkspaceApplicationModel.find({}, "_id attachments").lean();
     for (const app of applications) {
       if (app.attachments && Array.isArray(app.attachments) && app.attachments.length > 0) {
         const { syncApplicationAttachmentReferences } = await import("@/lib/utils/attachments");
@@ -84,7 +84,7 @@ export async function POST() {
       const storedTemplateRefs = (att.referencedByTemplates || []).map((id: any) => id.toString());
       
       // Check applications
-      const appsWithThisAttachment = await ApplicationModel.find({
+      const appsWithThisAttachment = await WorkspaceApplicationModel.find({
         attachments: attachmentId
       }, '_id').lean();
       const actualAppRefs = appsWithThisAttachment.map((app: any) => app._id.toString());

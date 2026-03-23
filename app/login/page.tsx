@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { APP_LOGIN_INTRO } from "@/lib/constants/app";
 
 function LoginForm() {
   const router = useRouter();
@@ -52,7 +53,7 @@ function LoginForm() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Login</CardTitle>
-          <CardDescription>Enter your credentials to access the application</CardDescription>
+          <CardDescription>{APP_LOGIN_INTRO}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

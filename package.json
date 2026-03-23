@@ -1,14 +1,19 @@
 {
-  "name": "email-automation",
+  "name": "grad-buddy",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate:workspace-applications": "tsx scripts/migrate-workspace-applications.ts",
+    "migrate:admission-payments": "tsx scripts/migrate-admission-payments.ts"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@google/generative-ai": "^0.21.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-checkbox": "^1.3.3",
@@ -35,6 +40,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "tsx": "^4.19.4",
     "@types/node": "^22.19.3",
     "@types/nodemailer": "^6.4.21",
     "@types/react": "^19.2.7",

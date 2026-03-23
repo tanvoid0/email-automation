@@ -260,7 +260,7 @@ export default function EditApplicationPage() {
           <Card>
             <CardContent className="py-8 text-center">
               <p className="text-muted-foreground mb-4">Application not found</p>
-              <Link href="/">
+              <Link href="/applications">
                 <Button variant="outline">
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   Back to Home
@@ -277,7 +277,7 @@ export default function EditApplicationPage() {
     <main className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-          <Link href="/" className="w-full sm:w-auto">
+          <Link href="/applications" className="w-full sm:w-auto">
             <Button variant="outline" size="sm" className="w-full sm:w-auto">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back

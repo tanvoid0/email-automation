@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
-import { ApplicationModel } from "@/lib/models/Application";
+import { WorkspaceApplicationModel } from "@/lib/models/WorkspaceApplication";
 import { EmailTemplateModel } from "@/lib/models/EmailTemplate";
 import { cleanupDanglingAttachments, cleanupInvalidAttachmentReferences } from "@/lib/utils/attachments";
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     if (cleanupReferences) {
       const refResult = await cleanupInvalidAttachmentReferences(
         AttachmentModel, 
-        ApplicationModel, 
+        WorkspaceApplicationModel, 
         EmailTemplateModel
       );
       results.references = refResult;
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     if (cleanupDangling) {
       const danglingResult = await cleanupDanglingAttachments(
         AttachmentModel, 
-        ApplicationModel, 
+        WorkspaceApplicationModel, 
         EmailTemplateModel
       );
       results.dangling = danglingResult;

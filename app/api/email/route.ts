@@ -3,6 +3,7 @@ import { sendEmail } from "@/lib/smtp";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
 import { TIMEOUT_CONFIG } from "@/lib/config/timeouts";
+import { APP_MOCK_EMAIL_DOMAIN } from "@/lib/constants/app";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30; // 30 seconds - allows time for SMTP operations and attachment fetching
@@ -198,10 +199,6 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/31dfd13d-d6ba-47a9-b401-873d783b3ca8',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/email/route.ts:97',message:'Email API received attachments',data:{attachmentsCount:finalAttachments.length,attachmentIds:attachmentIds||[],attachmentsFilenames:finalAttachments.map((a:any)=>a.filename)||[],duplicateFilenames:finalAttachments.map((a:any)=>a.filename).filter((f:string,i:number,arr:string[])=>arr.indexOf(f)!==i)||[],totalPayloadSizeMB:totalPayloadSizeMB,totalAttachmentSizeMB:(totalAttachmentSize/1024/1024).toFixed(2),source:attachmentIds?'database':'request'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
-
     // Warn if payload is large
     if (totalPayloadSize > 4.5 * 1024 * 1024) { // 4.5 MB warning threshold
       console.warn("[Email API] ⚠️ Large payload detected:", {
@@ -245,7 +242,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        messageId: `mock-${Date.now()}@email-automation.local`,
+        messageId: `mock-${Date.now()}@${APP_MOCK_EMAIL_DOMAIN}`,
         mocked: true,
       });
     }
