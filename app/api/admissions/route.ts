@@ -14,14 +14,23 @@ import { getErrorMessage } from "@/lib/types/errors";
 import type { ApiErrorResponse } from "@/lib/types/api";
 import { syncAdmissionSopLink } from "@/lib/utils/admission-sop-sync";
 import { leanPaymentToBrief } from "@/lib/utils/admission-payments";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const stage = request.nextUrl.searchParams.get("stage");
-    const filter: Record<string, unknown> = { kind: WORKSPACE_KIND_ADMISSION };
+    const filter: Record<string, unknown> = {
+      kind: WORKSPACE_KIND_ADMISSION,
+      userId: session.username,
+    };
     if (stage) filter.stage = stage;
     const admissions = await WorkspaceApplicationModel.find(filter)
       .sort({ sortOrder: 1, updatedAt: -1 })
@@ -33,6 +42,7 @@ export async function GET(request: NextRequest) {
     if (ids.length > 0) {
       const allPayments = await AdmissionPaymentModel.find({
         workspaceApplicationId: { $in: ids },
+        userId: session.username,
       })
         .sort({ createdAt: 1 })
         .lean();
@@ -61,6 +71,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const body = await request.json();
 
@@ -77,7 +92,7 @@ export async function POST(request: NextRequest) {
           if (!validationResult.success) {
             throw new Error(`Invalid attachment: ${validationResult.error.message}`);
           }
-          return await findOrCreateAttachment(AttachmentModel, validationResult.data);
+          return await findOrCreateAttachment(AttachmentModel, session.username, validationResult.data);
         }
         return null;
       });
@@ -123,6 +138,7 @@ export async function POST(request: NextRequest) {
 
     const doc = await WorkspaceApplicationModel.create({
       kind: WORKSPACE_KIND_ADMISSION,
+      userId: session.username,
       universityName: data.universityName,
       programName: data.programName,
       degree: data.degree,
@@ -148,7 +164,12 @@ export async function POST(request: NextRequest) {
       await syncAdmissionSopLink(doc._id.toString(), data.sopId, undefined);
     }
 
-    const populated = await WorkspaceApplicationModel.findById(doc._id).populate("sopId", "title").lean();
+    const populated = await WorkspaceApplicationModel.findOne({
+      _id: doc._id,
+      userId: session.username,
+    })
+      .populate("sopId", "title")
+      .lean();
     return NextResponse.json(populated, { status: 201 });
   } catch (error: unknown) {
     const errorMessage = getErrorMessage(error);

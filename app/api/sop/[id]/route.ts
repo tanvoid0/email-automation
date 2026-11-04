@@ -12,6 +12,7 @@ import { sopUpdateSchema } from "@/lib/validations/sop";
 import { getErrorMessage } from "@/lib/types/errors";
 import type { ApiErrorResponse } from "@/lib/types/api";
 import { mergeSectionsToContent } from "@/lib/utils/sop";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
-    const sop = await SOPModel.findById(id)
+    const sop = await SOPModel.findOne({ _id: id, userId: session.username })
       .populate("applicationId", "name university")
       .populate("admissionApplicationId", "universityName programName")
       .lean();
@@ -49,11 +55,16 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
     const body = await request.json();
 
-    const sop = await SOPModel.findById(id);
+    const sop = await SOPModel.findOne({ _id: id, userId: session.username });
     if (!sop) {
       return NextResponse.json({ error: "SOP not found" }, { status: 404 });
     }
@@ -113,7 +124,7 @@ export async function PATCH(
       );
     }
 
-    const updated = await SOPModel.findById(id)
+    const updated = await SOPModel.findOne({ _id: id, userId: session.username })
       .populate("applicationId", "name university")
       .populate("admissionApplicationId", "universityName programName")
       .lean();
@@ -134,9 +145,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
-    const sop = await SOPModel.findByIdAndDelete(id);
+    const sop = await SOPModel.findOneAndDelete({ _id: id, userId: session.username });
 
     if (!sop) {
       return NextResponse.json({ error: "SOP not found" }, { status: 404 });
@@ -144,7 +160,7 @@ export async function DELETE(
 
     const sopOid = sop._id;
     await WorkspaceApplicationModel.updateMany(
-      { kind: WORKSPACE_KIND_ADMISSION, sopId: sopOid },
+      { kind: WORKSPACE_KIND_ADMISSION, sopId: sopOid, userId: session.username },
       { $unset: { sopId: 1 } }
     );
 

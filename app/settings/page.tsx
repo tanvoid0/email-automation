@@ -9,10 +9,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Save, Sparkles, Mail, User, FileText, Wand2, CheckCircle2, Loader2, File, Paperclip, Plus, Upload, Clock, X } from "lucide-react";
+import { ArrowLeft, Save, Sparkles, Mail, User, FileText, Wand2, CheckCircle2, Loader2, File, Paperclip, Plus, Upload, Clock, X, Eye, EyeOff, LogOut, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { FormField } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +33,7 @@ import { useTemplate } from "@/lib/hooks/useTemplate";
 import { useEmailQueue } from "@/lib/hooks/useEmailQueue";
 import { cn } from "@/lib/utils";
 import { AdmissionSettingsCard } from "@/components/settings/AdmissionSettingsCard";
+import { SMTP_PROVIDERS, SMTP_PRESETS, type SmtpProvider } from "@/lib/constants/smtpPresets";
 
 interface TemplateFormData {
   content: string;
@@ -33,9 +41,31 @@ interface TemplateFormData {
   subject?: string;
 }
 
-import type { UserProfileFormData } from "@/lib/types/userProfile";
+import type { UserProfileFormData, SmtpConfigResponse } from "@/lib/types/userProfile";
 
 type ProfileFormData = UserProfileFormData;
+
+interface SmtpFormState {
+  provider: SmtpProvider;
+  host: string;
+  port: string;
+  secure: boolean;
+  user: string;
+  pass: string;
+  from: string;
+  hasPassword: boolean;
+}
+
+const EMPTY_SMTP_FORM: SmtpFormState = {
+  provider: "gmail",
+  host: "",
+  port: "",
+  secure: true,
+  user: "",
+  pass: "",
+  from: "",
+  hasPassword: false,
+};
 
 export default function SettingsPage() {
   const toast = useToast();
@@ -45,6 +75,12 @@ export default function SettingsPage() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isCustomizing, setIsCustomizing] = useState(false);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [smtpForm, setSmtpForm] = useState<SmtpFormState>(EMPTY_SMTP_FORM);
+  const [isLoadingSmtp, setIsLoadingSmtp] = useState(true);
+  const [isSavingSmtp, setIsSavingSmtp] = useState(false);
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
   const [customizationPrompt, setCustomizationPrompt] = useState("");
   const [showCustomizationInput, setShowCustomizationInput] = useState(false);
   const [templateAttachments, setTemplateAttachments] = useState<Attachment[]>([]);
@@ -233,6 +269,112 @@ export default function SettingsPage() {
     loadProfile();
   }, [profileForm]);
 
+  // Load current account + SMTP config on mount
+  useEffect(() => {
+    const loadAccountAndSmtp = async () => {
+      try {
+        const [verifyResponse, smtpResponse] = await Promise.all([
+          fetch("/api/auth/verify"),
+          fetch("/api/profile/smtp"),
+        ]);
+
+        if (verifyResponse.ok) {
+          const verifyData = await verifyResponse.json();
+          setUsername(verifyData.username || null);
+        }
+
+        if (smtpResponse.ok) {
+          const smtpData: SmtpConfigResponse = await smtpResponse.json();
+          setSmtpForm({
+            provider: smtpData.provider,
+            host: smtpData.host ? String(smtpData.host) : "",
+            port: smtpData.port ? String(smtpData.port) : "",
+            secure: smtpData.secure,
+            user: smtpData.user,
+            pass: "",
+            from: smtpData.from,
+            hasPassword: smtpData.hasPassword,
+          });
+        }
+      } catch (error) {
+        console.error("Error loading account/SMTP settings:", error);
+      } finally {
+        setIsLoadingSmtp(false);
+      }
+    };
+
+    loadAccountAndSmtp();
+  }, []);
+
+  const handleSmtpProviderChange = (provider: SmtpProvider) => {
+    if (provider === "custom") {
+      setSmtpForm((prev) => ({ ...prev, provider }));
+      return;
+    }
+    const preset = SMTP_PRESETS[provider];
+    setSmtpForm((prev) => ({
+      ...prev,
+      provider,
+      host: preset.host,
+      port: String(preset.port),
+      secure: preset.secure,
+    }));
+  };
+
+  const handleSmtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSmtp(true);
+    try {
+      const response = await fetch("/api/profile/smtp", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: smtpForm.provider,
+          host: smtpForm.provider === "custom" ? smtpForm.host : undefined,
+          port: smtpForm.provider === "custom" ? Number(smtpForm.port) : undefined,
+          secure: smtpForm.provider === "custom" ? smtpForm.secure : undefined,
+          user: smtpForm.user,
+          pass: smtpForm.pass || undefined,
+          from: smtpForm.from || undefined,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save email configuration");
+      }
+
+      setSmtpForm((prev) => ({
+        ...prev,
+        host: data.host ? String(data.host) : prev.host,
+        port: data.port ? String(data.port) : prev.port,
+        secure: data.secure,
+        from: data.from,
+        pass: "",
+        hasPassword: data.hasPassword,
+      }));
+      toast.success("Email configuration saved!");
+    } catch (error: any) {
+      toast.error(`Error saving email configuration: ${error.message}`);
+    } finally {
+      setIsSavingSmtp(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      router.push("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Logout error:", error);
+      toast.error("Failed to log out");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   const toggleAttachmentSelection = (attachmentId: string) => {
     const newSelected = new Set(selectedAttachmentIds);
     if (newSelected.has(attachmentId)) {
@@ -363,11 +505,7 @@ export default function SettingsPage() {
       }
 
       const data = await response.json();
-      if (data.mocked) {
-        toast.success("Test email would be sent (MOCK MODE). Configure SMTP settings to send real emails.");
-      } else {
-        toast.success(`Test email sent successfully to ${data.to}! Please check your inbox.`);
-      }
+      toast.success(`Test email sent successfully to ${data.to}! Please check your inbox.`);
     } catch (error: any) {
       toast.error(`Failed to send test email: ${error.message}`);
     } finally {
@@ -494,9 +632,22 @@ export default function SettingsPage() {
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold">Settings</h1>
             <p className="text-sm sm:text-base text-muted-foreground">
-              Manage your email template and personal profile
+              Manage your account, email configuration, template and profile
             </p>
           </div>
+          {username && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="w-full sm:w-auto shrink-0"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              {isLoggingOut ? "Logging out..." : `Log out${username ? ` (${username})` : ""}`}
+            </Button>
+          )}
         </div>
 
         {/* Email Queue Settings Section */}
@@ -552,6 +703,167 @@ export default function SettingsPage() {
           alternateSettingsHref="/admissions/settings"
           alternateSettingsLabel="Open admission settings page"
         />
+
+        {/* Email Configuration (SMTP) Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              <CardTitle>Email Configuration</CardTitle>
+            </div>
+            <CardDescription>
+              The account that emails are actually sent from. Each account configures its own — nothing is shared.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingSmtp ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading email configuration...
+              </div>
+            ) : (
+              <form onSubmit={handleSmtpSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="smtp-provider">Provider</Label>
+                  <Select
+                    value={smtpForm.provider}
+                    onValueChange={(v) => handleSmtpProviderChange(v as SmtpProvider)}
+                  >
+                    <SelectTrigger id="smtp-provider" className="max-w-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SMTP_PROVIDERS.map((p) => (
+                        <SelectItem key={p.value} value={p.value}>
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {smtpForm.provider === "custom"
+                      ? "Enter your own SMTP host, port and security settings below."
+                      : `Host and port are pre-filled for ${SMTP_PROVIDERS.find((p) => p.value === smtpForm.provider)?.label}.`}
+                  </p>
+                </div>
+
+                {smtpForm.provider === "custom" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_auto] gap-4">
+                    <FormField label="SMTP Host">
+                      <Input
+                        placeholder="smtp.example.com"
+                        value={smtpForm.host}
+                        onChange={(e) => setSmtpForm((prev) => ({ ...prev, host: e.target.value }))}
+                        required
+                      />
+                    </FormField>
+                    <FormField label="Port">
+                      <Input
+                        type="number"
+                        placeholder="587"
+                        value={smtpForm.port}
+                        onChange={(e) => setSmtpForm((prev) => ({ ...prev, port: e.target.value }))}
+                        required
+                      />
+                    </FormField>
+                    <div className="flex items-end pb-2">
+                      <label className="flex items-center gap-2 text-sm whitespace-nowrap">
+                        <Checkbox
+                          checked={smtpForm.secure}
+                          onCheckedChange={(checked) =>
+                            setSmtpForm((prev) => ({ ...prev, secure: checked === true }))
+                          }
+                        />
+                        Use TLS
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField label="SMTP Username / Email">
+                    <Input
+                      type="email"
+                      placeholder="you@example.com"
+                      value={smtpForm.user}
+                      onChange={(e) => setSmtpForm((prev) => ({ ...prev, user: e.target.value }))}
+                      required
+                    />
+                  </FormField>
+                  <FormField label="From (optional)">
+                    <Input
+                      placeholder="Your Name <you@example.com>"
+                      value={smtpForm.from}
+                      onChange={(e) => setSmtpForm((prev) => ({ ...prev, from: e.target.value }))}
+                    />
+                  </FormField>
+                </div>
+
+                <FormField
+                  label={smtpForm.provider === "custom" ? "SMTP Password" : "App Password"}
+                >
+                  <div className="relative">
+                    <Input
+                      type={showSmtpPassword ? "text" : "password"}
+                      placeholder={smtpForm.hasPassword ? "Leave blank to keep current password" : "Enter password or app password"}
+                      value={smtpForm.pass}
+                      onChange={(e) => setSmtpForm((prev) => ({ ...prev, pass: e.target.value }))}
+                      className="pr-10"
+                      required={!smtpForm.hasPassword}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSmtpPassword((v) => !v)}
+                      className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                      tabIndex={-1}
+                      aria-label={showSmtpPassword ? "Hide password" : "Show password"}
+                    >
+                      {showSmtpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {smtpForm.provider !== "custom" && (
+                    <p className="text-xs text-muted-foreground">
+                      Gmail and Outlook require an app password, not your regular login password.{" "}
+                      <button
+                        type="button"
+                        onClick={() => setIsSmtpInfoDialogOpen(true)}
+                        className="text-primary hover:underline"
+                      >
+                        How do I get one?
+                      </button>
+                    </p>
+                  )}
+                </FormField>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button type="submit" disabled={isSavingSmtp} className="w-full sm:w-auto bg-primary hover:bg-primary/90">
+                    {isSavingSmtp ? (
+                      <>
+                        <Save className="h-4 w-4 mr-2 animate-pulse" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Save Email Configuration
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleTestEmail}
+                    disabled={isTestingEmail || !smtpForm.hasPassword}
+                    variant="outline"
+                    className="w-full sm:w-auto border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    {isTestingEmail ? "Sending Test Email..." : "Send Test Email"}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Personal Profile Section */}
         <Card>
@@ -663,7 +975,7 @@ export default function SettingsPage() {
                 className="text-xs"
               >
                 <Mail className="h-3 w-3 mr-1" />
-                SMTP Configuration Info
+                App Password Help
               </Button>
               <Button
                 type="button"
@@ -1034,28 +1346,36 @@ export default function SettingsPage() {
               <Dialog open={isSmtpInfoDialogOpen} onOpenChange={setIsSmtpInfoDialogOpen}>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
-                    <DialogTitle>SMTP Configuration</DialogTitle>
+                    <DialogTitle>Getting an app password</DialogTitle>
                     <DialogDescription>
-                      Information about configuring SMTP settings for sending emails
+                      Most providers block your regular password for SMTP and require a separate app password.
                     </DialogDescription>
                   </DialogHeader>
-                  
+
                   <div className="space-y-4 py-4">
                     <div className="p-3 bg-muted border rounded-md">
+                      <p className="text-sm font-semibold mb-1">Gmail</p>
                       <p className="text-sm text-muted-foreground">
-                        <strong className="text-foreground">SMTP Configuration:</strong> To test your email configuration, add <code className="bg-background px-1.5 py-0.5 rounded text-xs">SMTP_TEST_EMAIL</code> to your <code className="bg-background px-1.5 py-0.5 rounded text-xs">.env.local</code> file with your test email address, then click "Test Email Configuration".
+                        Enable 2-Step Verification, then create one at{" "}
+                        <code className="bg-background px-1.5 py-0.5 rounded text-xs">myaccount.google.com/apppasswords</code>.
+                      </p>
+                    </div>
+                    <div className="p-3 bg-muted border rounded-md">
+                      <p className="text-sm font-semibold mb-1">Outlook / Microsoft 365</p>
+                      <p className="text-sm text-muted-foreground">
+                        Create an app password under Security → Advanced security options in your Microsoft account.
                       </p>
                     </div>
                     <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
                       <p className="text-sm text-amber-900 dark:text-amber-100 font-semibold mb-2">
-                        ⚠️ For Tencent Exmail (@stu.yzu.edu.cn), you need an App Password:
+                        Tencent Exmail (e.g. @stu.yzu.edu.cn) — use Custom provider:
                       </p>
                       <ol className="text-xs text-amber-800 dark:text-amber-200 space-y-1 list-decimal list-inside ml-2">
-                        <li>Log in to Tencent Exmail web interface</li>
+                        <li>Host: <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">smtp.exmail.qq.com</code>, Port: 465, TLS on</li>
+                        <li>Log in to the Tencent Exmail web interface</li>
                         <li>Go to Settings (设置) → Account (账户)</li>
                         <li>Find "Email Binding" (邮箱绑定) or "Client Password" (客户端密码)</li>
-                        <li>Click "Generate dedicated password" (生成专用密码)</li>
-                        <li>Use this app password in <code className="bg-amber-100 dark:bg-amber-900 px-1 rounded">SMTP_PASS</code> (NOT your regular password)</li>
+                        <li>Click "Generate dedicated password" (生成专用密码) and use it as the password here</li>
                       </ol>
                     </div>
                   </div>

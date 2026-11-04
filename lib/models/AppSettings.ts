@@ -1,8 +1,6 @@
 import { prop, getModelForClass, modelOptions, type ReturnModelType } from "@typegoose/typegoose";
 import mongoose from "mongoose";
 
-const SETTINGS_KEY = "default";
-
 @modelOptions({
   schemaOptions: {
     timestamps: true,
@@ -14,7 +12,8 @@ const SETTINGS_KEY = "default";
   },
 })
 export class AppSettings {
-  @prop({ required: true, unique: true, default: SETTINGS_KEY })
+  // Owning account's username — one settings doc per account (reuses the old "default" singleton key)
+  @prop({ required: true, unique: true })
   public key!: string;
 
   /** e.g. Graduate (Master's/PhD), Undergraduate */
@@ -44,4 +43,3 @@ function getAppSettingsModel(): ReturnModelType<typeof AppSettings, {}> {
 }
 
 export const AppSettingsModel = getAppSettingsModel();
-export const APP_SETTINGS_KEY_DEFAULT = SETTINGS_KEY;

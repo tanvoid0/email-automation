@@ -19,6 +19,10 @@ export interface TemplateSection {
   },
 })
 export class SopTemplate {
+  // Owning account's username
+  @prop({ required: true, index: true })
+  public userId!: string;
+
   @prop({ required: true })
   public name!: string;
 

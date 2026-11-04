@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import { APP_SETTINGS_KEY_DEFAULT, AppSettingsModel } from "@/lib/models/AppSettings";
+import { AppSettingsModel } from "@/lib/models/AppSettings";
 import { admissionSettingsPatchSchema } from "@/lib/validations/appSettings";
 import { getErrorMessage } from "@/lib/types/errors";
 import type { ApiErrorResponse } from "@/lib/types/api";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" } satisfies ApiErrorResponse, { status: 401 });
+    }
+
     await connectDB();
-    const doc = await AppSettingsModel.findOne({ key: APP_SETTINGS_KEY_DEFAULT }).lean();
+    const doc = await AppSettingsModel.findOne({ key: session.username }).lean();
     return NextResponse.json({
       admissionLevel: doc?.admissionLevel ?? "",
       admissionSubjectArea: doc?.admissionSubjectArea ?? "",
@@ -25,6 +31,11 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" } satisfies ApiErrorResponse, { status: 401 });
+    }
+
     await connectDB();
     const body = await request.json();
     const parsed = admissionSettingsPatchSchema.safeParse(body);
@@ -35,7 +46,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
     const data = parsed.data;
-    const $set: Record<string, string> = { key: APP_SETTINGS_KEY_DEFAULT };
+    const $set: Record<string, string> = { key: session.username };
     if (data.admissionLevel !== undefined) {
       $set.admissionLevel = data.admissionLevel.trim();
     }
@@ -44,7 +55,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const doc = await AppSettingsModel.findOneAndUpdate(
-      { key: APP_SETTINGS_KEY_DEFAULT },
+      { key: session.username },
       { $set },
       { new: true, upsert: true }
     );

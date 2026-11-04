@@ -13,6 +13,7 @@ import { attachmentSchema } from "@/lib/validations/attachment";
 import { getErrorMessage } from "@/lib/types/errors";
 import type { ApiErrorResponse } from "@/lib/types/api";
 import { syncAdmissionSopLink } from "@/lib/utils/admission-sop-sync";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +22,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
     const admission = await WorkspaceApplicationModel.findOne({
       _id: id,
       kind: WORKSPACE_KIND_ADMISSION,
+      userId: session.username,
     })
       .populate("sopId", "title")
       .lean();
@@ -48,6 +55,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
     const body = await request.json();
@@ -55,6 +67,7 @@ export async function PATCH(
     const admission = await WorkspaceApplicationModel.findOne({
       _id: id,
       kind: WORKSPACE_KIND_ADMISSION,
+      userId: session.username,
     });
     if (!admission) {
       return NextResponse.json({ error: "Admission not found" }, { status: 404 });
@@ -75,7 +88,7 @@ export async function PATCH(
             if (!validationResult.success) {
               throw new Error(`Invalid attachment: ${validationResult.error.message}`);
             }
-            return await findOrCreateAttachment(AttachmentModel, validationResult.data);
+            return await findOrCreateAttachment(AttachmentModel, session.username, validationResult.data);
           }
           return null;
         });
@@ -166,6 +179,7 @@ export async function PATCH(
     const updated = await WorkspaceApplicationModel.findOne({
       _id: id,
       kind: WORKSPACE_KIND_ADMISSION,
+      userId: session.username,
     })
       .populate("sopId", "title")
       .lean();
@@ -185,17 +199,24 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
     const admission = await WorkspaceApplicationModel.findOneAndDelete({
       _id: id,
       kind: WORKSPACE_KIND_ADMISSION,
+      userId: session.username,
     });
     if (!admission) {
       return NextResponse.json({ error: "Admission not found" }, { status: 404 });
     }
     await AdmissionPaymentModel.deleteMany({
       workspaceApplicationId: new mongoose.Types.ObjectId(id),
+      userId: session.username,
     });
     await syncAdmissionSopLink(id, undefined, admission.sopId?.toString());
     return NextResponse.json({ message: "Admission deleted successfully" });

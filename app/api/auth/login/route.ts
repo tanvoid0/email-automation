@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyCredentials, createSession, setSessionCookie } from "@/lib/auth";
+import { verifyCredentials, createSession, setSessionCookie, normalizeUsername } from "@/lib/auth";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { username, password } = loginSchema.parse(body);
 
-    if (!verifyCredentials(username, password)) {
+    if (!(await verifyCredentials(username, password))) {
       return NextResponse.json(
         { error: "Invalid username or password" },
         { status: 401 }
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create session
-    const session = createSession(username);
+    const session = createSession(normalizeUsername(username));
     const response = NextResponse.json({ success: true });
     setSessionCookie(response, session);
 

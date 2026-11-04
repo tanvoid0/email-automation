@@ -35,17 +35,17 @@ export async function GET() {
       notificationsUnread,
       statusAgg,
     ] = await Promise.all([
-      WorkspaceApplicationModel.countDocuments({ kind: WORKSPACE_KIND_EMAIL }),
-      WorkspaceApplicationModel.countDocuments({ kind: WORKSPACE_KIND_ADMISSION }),
-      SOPModel.countDocuments(),
-      AttachmentModel.countDocuments(),
-      SopTemplateModel.countDocuments(),
+      WorkspaceApplicationModel.countDocuments({ userId: session.username, kind: WORKSPACE_KIND_EMAIL }),
+      WorkspaceApplicationModel.countDocuments({ userId: session.username, kind: WORKSPACE_KIND_ADMISSION }),
+      SOPModel.countDocuments({ userId: session.username }),
+      AttachmentModel.countDocuments({ userId: session.username }),
+      SopTemplateModel.countDocuments({ userId: session.username }),
       NotificationModel.countDocuments({
         userId: session.username,
         read: false,
       }),
       WorkspaceApplicationModel.aggregate<{ _id: AppStatus; count: number }>([
-        { $match: { kind: WORKSPACE_KIND_EMAIL } },
+        { $match: { userId: session.username, kind: WORKSPACE_KIND_EMAIL } },
         { $group: { _id: "$status", count: { $sum: 1 } } },
       ]),
     ]);

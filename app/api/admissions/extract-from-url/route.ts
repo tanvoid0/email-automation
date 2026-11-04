@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
-import { APP_SETTINGS_KEY_DEFAULT, AppSettingsModel } from "@/lib/models/AppSettings";
+import { AppSettingsModel } from "@/lib/models/AppSettings";
 import { AdmissionExtractService } from "@/lib/services/AdmissionExtractService";
 import { admissionExtractRequestSchema } from "@/lib/validations/admissionExtract";
+import { getSession } from "@/lib/auth";
 import { getErrorMessage } from "@/lib/types/errors";
 import type { ApiErrorResponse } from "@/lib/types/api";
 
@@ -11,6 +12,11 @@ export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" } satisfies ApiErrorResponse, { status: 401 });
+    }
+
     const body = await request.json();
     const parsed = admissionExtractRequestSchema.safeParse(body);
     if (!parsed.success) {
@@ -21,7 +27,7 @@ export async function POST(request: NextRequest) {
     }
 
     await connectDB();
-    const settings = await AppSettingsModel.findOne({ key: APP_SETTINGS_KEY_DEFAULT }).lean();
+    const settings = await AppSettingsModel.findOne({ key: session.username }).lean();
 
     const result = await AdmissionExtractService.extract(parsed.data, {
       admissionLevel: settings?.admissionLevel,

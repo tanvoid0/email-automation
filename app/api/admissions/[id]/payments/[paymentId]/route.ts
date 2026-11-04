@@ -7,6 +7,7 @@ import {
 } from "@/lib/models/WorkspaceApplication";
 import { AdmissionPaymentModel } from "@/lib/models/AdmissionPayment";
 import { admissionPaymentUpdateSchema } from "@/lib/validations/admissionPayment";
+import { getSession } from "@/lib/auth";
 import { getErrorMessage } from "@/lib/types/errors";
 import type { ApiErrorResponse } from "@/lib/types/api";
 import { leanPaymentToRecord } from "@/lib/utils/admission-payments";
@@ -24,11 +25,16 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; paymentId: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     await connectDB();
     const { id, paymentId } = await params;
     const admission = await WorkspaceApplicationModel.findOne({
       _id: id,
       kind: WORKSPACE_KIND_ADMISSION,
+      userId: session.username,
     })
       .select("_id")
       .lean();
@@ -39,6 +45,7 @@ export async function PATCH(
     const payment = await AdmissionPaymentModel.findOne({
       _id: paymentId,
       workspaceApplicationId: new mongoose.Types.ObjectId(id),
+      userId: session.username,
     });
     if (!payment) {
       return NextResponse.json({ error: "Payment not found" }, { status: 404 });
@@ -99,11 +106,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; paymentId: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     await connectDB();
     const { id, paymentId } = await params;
     const admission = await WorkspaceApplicationModel.findOne({
       _id: id,
       kind: WORKSPACE_KIND_ADMISSION,
+      userId: session.username,
     })
       .select("_id")
       .lean();
@@ -114,6 +126,7 @@ export async function DELETE(
     const res = await AdmissionPaymentModel.findOneAndDelete({
       _id: paymentId,
       workspaceApplicationId: new mongoose.Types.ObjectId(id),
+      userId: session.username,
     });
     if (!res) {
       return NextResponse.json({ error: "Payment not found" }, { status: 404 });

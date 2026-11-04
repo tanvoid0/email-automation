@@ -1,9 +1,33 @@
 import { prop, getModelForClass, modelOptions, type ReturnModelType } from "@typegoose/typegoose";
 import mongoose from "mongoose";
 import type { UserProfileData } from "@/lib/types/userProfile";
+import type { SmtpProvider } from "@/lib/constants/smtpPresets";
 
-@modelOptions({ 
-  schemaOptions: { 
+class SmtpConfig {
+  @prop({ required: true, enum: ["gmail", "outlook", "custom"], default: "gmail" })
+  public provider!: SmtpProvider;
+
+  @prop({ required: false })
+  public host?: string;
+
+  @prop({ required: false })
+  public port?: number;
+
+  @prop({ required: false, default: true })
+  public secure?: boolean;
+
+  @prop({ required: false })
+  public user?: string;
+
+  @prop({ required: false })
+  public pass?: string;
+
+  @prop({ required: false })
+  public from?: string;
+}
+
+@modelOptions({
+  schemaOptions: {
     timestamps: true,
     collection: "userprofiles"
   },
@@ -13,13 +37,14 @@ import type { UserProfileData } from "@/lib/types/userProfile";
   }
 })
 export class UserProfile implements UserProfileData {
-  @prop({ required: true, unique: true, default: "default" })
+  // The owning account's username (1:1 with User.username)
+  @prop({ required: true, unique: true })
   public name!: string;
 
-  @prop({ required: true })
+  @prop({ required: false, default: "" })
   public fullName!: string;
 
-  @prop({ required: true })
+  @prop({ required: false, default: "" })
   public email!: string;
 
   @prop({ required: false })
@@ -30,6 +55,9 @@ export class UserProfile implements UserProfileData {
 
   @prop({ required: false })
   public gpa?: string;
+
+  @prop({ required: false, type: () => SmtpConfig, _id: false })
+  public smtp?: SmtpConfig;
 }
 
 // Proper model initialization for Next.js with hot reloading
@@ -54,4 +82,3 @@ function getUserProfileModel(): ReturnModelType<typeof UserProfile, {}> {
 }
 
 export const UserProfileModel = getUserProfileModel();
-

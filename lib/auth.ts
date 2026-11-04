@@ -1,5 +1,8 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import connectDB from "@/lib/mongodb";
+import { UserModel } from "@/lib/models/User";
 
 const SESSION_COOKIE_NAME = "auth_session";
 const SESSION_DURATION_DAYS = 30;
@@ -73,21 +76,43 @@ export function clearSessionCookie(response: NextResponse): void {
   response.cookies.delete(SESSION_COOKIE_NAME);
 }
 
+export function normalizeUsername(username: string): string {
+  return username.trim().toLowerCase();
+}
+
 /**
- * Verifies username and password against environment variables
+ * Verifies username and password against the users collection
  */
-export function verifyCredentials(
+export async function verifyCredentials(
   username: string,
   password: string
-): boolean {
-  const envUsername = process.env.AUTH_USERNAME;
-  const envPassword = process.env.AUTH_PASSWORD;
-  
-  if (!envUsername || !envPassword) {
-    console.error("AUTH_USERNAME and AUTH_PASSWORD must be set in .env");
+): Promise<boolean> {
+  await connectDB();
+  const user = await UserModel.findOne({ username: normalizeUsername(username) });
+  if (!user) {
     return false;
   }
-  
-  return username === envUsername && password === envPassword;
+  return bcrypt.compare(password, user.passwordHash);
+}
+
+/**
+ * Creates a new account. Returns the normalized username on success.
+ */
+export async function createUser(
+  username: string,
+  password: string
+): Promise<{ success: boolean; username?: string; error?: string }> {
+  await connectDB();
+  const normalized = normalizeUsername(username);
+
+  const existing = await UserModel.findOne({ username: normalized });
+  if (existing) {
+    return { success: false, error: "That username is already taken" };
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  await UserModel.create({ username: normalized, passwordHash });
+
+  return { success: true, username: normalized };
 }
 

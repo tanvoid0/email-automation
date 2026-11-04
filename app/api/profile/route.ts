@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { UserProfileModel } from "@/lib/models/UserProfile";
+import { getSession } from "@/lib/auth";
 import type { UserProfileFormData } from "@/lib/types/userProfile";
 
 export const dynamic = "force-dynamic";
@@ -10,12 +11,17 @@ interface ErrorResponse {
   details?: Record<string, string>;
 }
 
-// GET profile
+// GET profile for the logged-in account
 export async function GET() {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json<ErrorResponse>({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
-    const profile = await UserProfileModel.findOne({ name: "default" });
-    
+    const profile = await UserProfileModel.findOne({ name: session.username });
+
     // Return empty profile if it doesn't exist (no defaults)
     if (!profile) {
       return NextResponse.json({
@@ -38,9 +44,14 @@ export async function GET() {
   }
 }
 
-// PUT update profile
+// PUT update profile for the logged-in account
 export async function PUT(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json<ErrorResponse>({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const body = await request.json() as UserProfileFormData;
     const { fullName, email, degree, university, gpa } = body;
@@ -53,7 +64,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const profile = await UserProfileModel.findOneAndUpdate(
-      { name: "default" },
+      { name: session.username },
       { fullName, email, degree, university, gpa },
       { new: true, upsert: true }
     );
@@ -68,4 +79,3 @@ export async function PUT(request: NextRequest) {
     );
   }
 }
-

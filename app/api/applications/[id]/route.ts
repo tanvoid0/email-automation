@@ -7,6 +7,7 @@ import {
 import { AttachmentModel } from "@/lib/models/Attachment";
 import { EmailTemplateModel } from "@/lib/models/EmailTemplate";
 import { attachmentSchema } from "@/lib/validations/attachment";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
     const application = await WorkspaceApplicationModel.findOne({
       _id: id,
       kind: WORKSPACE_KIND_EMAIL,
+      userId: session.username,
     });
 
     if (!application) {
@@ -46,6 +53,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
     const body = await request.json();
@@ -53,6 +65,7 @@ export async function PATCH(
     const application = await WorkspaceApplicationModel.findOne({
       _id: id,
       kind: WORKSPACE_KIND_EMAIL,
+      userId: session.username,
     });
 
     if (!application) {
@@ -140,7 +153,7 @@ export async function PATCH(
               throw new Error(`Invalid attachment: ${validationResult.error.message}`);
             }
             // Use findOrCreateAttachment to avoid duplicates
-            return await findOrCreateAttachment(AttachmentModel, validationResult.data);
+            return await findOrCreateAttachment(AttachmentModel, session.username, validationResult.data);
           }
           return null; // Invalid format
         });
@@ -159,11 +172,11 @@ export async function PATCH(
     // Update attachment references
     const newAttachmentIds = application.attachments || [];
     const { syncApplicationAttachmentReferences, cleanupDanglingAttachments } = await import("@/lib/utils/attachments");
-    await syncApplicationAttachmentReferences(AttachmentModel, id, oldAttachmentIds, newAttachmentIds);
+    await syncApplicationAttachmentReferences(AttachmentModel, session.username, id, oldAttachmentIds, newAttachmentIds);
 
     // Clean up dangling attachments after update (if attachments were removed)
     if (oldAttachmentIds.length > 0) {
-      await cleanupDanglingAttachments(AttachmentModel, WorkspaceApplicationModel, EmailTemplateModel);
+      await cleanupDanglingAttachments(AttachmentModel, session.username, WorkspaceApplicationModel, EmailTemplateModel);
     }
     return NextResponse.json(application);
   } catch (error: any) {
@@ -181,11 +194,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
     const application = await WorkspaceApplicationModel.findOne({
       _id: id,
       kind: WORKSPACE_KIND_EMAIL,
+      userId: session.username,
     });
 
     if (!application) {
@@ -202,7 +221,7 @@ export async function DELETE(
     if (attachmentIds.length > 0) {
       const { removeApplicationReference } = await import("@/lib/utils/attachments");
       for (const attachmentId of attachmentIds) {
-        await removeApplicationReference(AttachmentModel, attachmentId, id);
+        await removeApplicationReference(AttachmentModel, session.username, attachmentId, id);
       }
     }
 
@@ -210,12 +229,13 @@ export async function DELETE(
     await WorkspaceApplicationModel.findOneAndDelete({
       _id: id,
       kind: WORKSPACE_KIND_EMAIL,
+      userId: session.username,
     });
 
     // Clean up dangling attachments (attachments not referenced by any other application or template)
     if (attachmentIds.length > 0) {
       const { cleanupDanglingAttachments } = await import("@/lib/utils/attachments");
-      await cleanupDanglingAttachments(AttachmentModel, WorkspaceApplicationModel, EmailTemplateModel);
+      await cleanupDanglingAttachments(AttachmentModel, session.username, WorkspaceApplicationModel, EmailTemplateModel);
     }
 
     return NextResponse.json({ message: "Application deleted successfully" });

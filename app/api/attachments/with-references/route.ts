@@ -3,31 +3,37 @@ import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
 import { WorkspaceApplicationModel } from "@/lib/models/WorkspaceApplication";
 import { EmailTemplateModel } from "@/lib/models/EmailTemplate";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // GET all attachments with their references (applications and templates)
 export async function GET() {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
-    
+
     // Get all attachments - exclude content field to avoid memory issues with large files
     // Include reference tracking fields
     // Use lean() to get plain objects and allowDiskUse for sorting large datasets
-    const attachments = await AttachmentModel.find()
+    const attachments = await AttachmentModel.find({ userId: session.username })
       .select('_id filename contentType size createdAt updatedAt referencedByApplications referencedByTemplates')
       .sort({ createdAt: -1 })
       .lean()
       .allowDiskUse(true);
-    
+
     // Get all applications
     const applications = await WorkspaceApplicationModel.find(
-      {},
+      { userId: session.username },
       "_id name email attachments kind universityName"
     ).lean();
-    
-    // Get template (there's only one default template)
-    const template = await EmailTemplateModel.findOne({ name: "default" }).lean();
+
+    // Get this account's template (one per account, keyed by username)
+    const template = await EmailTemplateModel.findOne({ name: session.username }).lean();
     
     // Build a map of attachment ID to applications that reference it
     // Use both the stored references and scan applications for verification

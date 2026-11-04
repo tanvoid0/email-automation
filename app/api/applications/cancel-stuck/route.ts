@@ -6,6 +6,7 @@ import {
 } from "@/lib/models/WorkspaceApplication";
 import type { ApiErrorResponse } from "@/lib/types/api";
 import { getErrorMessage } from "@/lib/types/errors";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,14 +16,20 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
-    
+
     // Find all applications stuck in "sending" status
     const stuckApplications = await WorkspaceApplicationModel.find({
       kind: WORKSPACE_KIND_EMAIL,
       status: "sending",
+      userId: session.username,
     });
-    
+
     if (stuckApplications.length === 0) {
       return NextResponse.json({
         success: true,
@@ -33,8 +40,8 @@ export async function POST(request: NextRequest) {
 
     // Update all stuck applications to "cancelled" status and clear errors
     const updateResult = await WorkspaceApplicationModel.updateMany(
-      { kind: WORKSPACE_KIND_EMAIL, status: "sending" },
-      { 
+      { kind: WORKSPACE_KIND_EMAIL, status: "sending", userId: session.username },
+      {
         $set: { 
           status: "cancelled",
           error: undefined,
@@ -70,11 +77,17 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
-    
+
     const stuckApplications = await WorkspaceApplicationModel.find({
       kind: WORKSPACE_KIND_EMAIL,
       status: "sending",
+      userId: session.username,
     });
     
     return NextResponse.json({

@@ -2,17 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
 import { WorkspaceApplicationModel } from "@/lib/models/WorkspaceApplication";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // POST deduplicate attachments - merge duplicates and update references
 export async function POST() {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
-    
+
     // Get all attachments with content (we need content for comparison)
     // Use allowDiskUse to handle large datasets
-    const allAttachments = await AttachmentModel.find()
+    const allAttachments = await AttachmentModel.find({ userId: session.username })
       .select('_id filename content contentType size')
       .lean()
       .allowDiskUse(true);
@@ -55,7 +61,8 @@ export async function POST() {
     for (const { keep, remove } of duplicates) {
       // Find all applications that reference any of the duplicate attachments
       const applications = await WorkspaceApplicationModel.find({
-        attachments: { $in: remove }
+        attachments: { $in: remove },
+        userId: session.username,
       });
       
       for (const app of applications) {
@@ -92,7 +99,8 @@ export async function POST() {
     let deletedCount = 0;
     if (idsToDelete.length > 0) {
       const result = await AttachmentModel.deleteMany({
-        _id: { $in: idsToDelete }
+        _id: { $in: idsToDelete },
+        userId: session.username,
       });
       deletedCount = result.deletedCount || 0;
     }

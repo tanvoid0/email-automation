@@ -2,16 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
 import { sendEmail } from "@/lib/smtp";
+import { getUserSmtpConfig } from "@/lib/utils/smtpConfig";
+import { getSession } from "@/lib/auth";
 import type { ProcessQueueRequest, ProcessQueueResponse, ApiErrorResponse } from "@/lib/types/api";
 import type { EmailAttachment } from "@/lib/types/smtp";
 import { getErrorMessage } from "@/lib/types/errors";
-import { APP_MOCK_EMAIL_DOMAIN } from "@/lib/constants/app";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes for batch processing
-
-// Set to false to enable real email sending
-const MOCK_EMAIL = process.env.SMTP_HOST ? false : true;
 
 /**
  * Process email queue in batches
@@ -51,7 +49,12 @@ function isValidObjectId(id: unknown): id is string {
 export async function PUT(request: NextRequest) {
   let itemId: string | undefined;
   const requestStartTime = Date.now();
-  
+
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" } as ApiErrorResponse, { status: 401 });
+  }
+
   try {
     console.log('[Process Queue API] PUT request received:', {
       timestamp: new Date().toISOString(),
@@ -78,6 +81,14 @@ export async function PUT(request: NextRequest) {
       attachmentIds: attachmentIds,
       timestamp: new Date().toISOString(),
     });
+
+    const smtpConfig = await getUserSmtpConfig(session.username);
+    if (!smtpConfig) {
+      const errorResponse: ApiErrorResponse = {
+        error: "Email (SMTP) is not configured yet. Set it up in Settings first.",
+      };
+      return NextResponse.json(errorResponse, { status: 400 });
+    }
 
     if (!to || !subject || !text) {
       const errorResponse: ApiErrorResponse = {
@@ -120,7 +131,8 @@ export async function PUT(request: NextRequest) {
         
         if (validIds.length > 0) {
           const dbAttachments = await AttachmentModel.find({
-            _id: { $in: validIds }
+            _id: { $in: validIds },
+            userId: session.username,
           });
           
           console.log('[Process Queue API] Attachments fetched from DB:', {
@@ -151,35 +163,6 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    if (MOCK_EMAIL) {
-      // Mock email sending
-      console.log('[Process Queue API] Mock email mode:', {
-        itemId,
-        to,
-        subject: subject?.substring(0, 50),
-        attachmentsCount: finalAttachments.length,
-        timestamp: new Date().toISOString(),
-      });
-      
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      
-      const mockResponse: ProcessQueueResponse = {
-        success: true,
-        messageId: `mock-${Date.now()}@${APP_MOCK_EMAIL_DOMAIN}`,
-        mocked: true,
-        itemId,
-      };
-      
-      console.log('[Process Queue API] Mock email sent successfully:', {
-        itemId,
-        messageId: mockResponse.messageId,
-        duration: Date.now() - requestStartTime,
-        timestamp: new Date().toISOString(),
-      });
-      
-      return NextResponse.json(mockResponse);
-    }
-
     // Real email sending
     console.log('[Process Queue API] Sending real email:', {
       itemId,
@@ -191,7 +174,7 @@ export async function PUT(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
 
-    const result = await sendEmail({
+    const result = await sendEmail(smtpConfig, {
       to,
       subject,
       text,

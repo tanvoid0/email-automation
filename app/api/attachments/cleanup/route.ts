@@ -4,12 +4,18 @@ import { AttachmentModel } from "@/lib/models/Attachment";
 import { WorkspaceApplicationModel } from "@/lib/models/WorkspaceApplication";
 import { EmailTemplateModel } from "@/lib/models/EmailTemplate";
 import { cleanupDanglingAttachments, cleanupInvalidAttachmentReferences } from "@/lib/utils/attachments";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // POST cleanup dangling attachments and invalid references
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     
     const body = await request.json().catch(() => ({}));
@@ -20,18 +26,20 @@ export async function POST(request: NextRequest) {
     // Clean up invalid attachment references (remove invalid IDs from applications/templates)
     if (cleanupReferences) {
       const refResult = await cleanupInvalidAttachmentReferences(
-        AttachmentModel, 
-        WorkspaceApplicationModel, 
+        AttachmentModel,
+        session.username,
+        WorkspaceApplicationModel,
         EmailTemplateModel
       );
       results.references = refResult;
     }
-    
+
     // Clean up dangling attachments (delete attachments not referenced by anything)
     if (cleanupDangling) {
       const danglingResult = await cleanupDanglingAttachments(
-        AttachmentModel, 
-        WorkspaceApplicationModel, 
+        AttachmentModel,
+        session.username,
+        WorkspaceApplicationModel,
         EmailTemplateModel
       );
       results.dangling = danglingResult;

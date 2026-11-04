@@ -5,12 +5,18 @@ import {
   WORKSPACE_KIND_EMAIL,
 } from "@/lib/models/WorkspaceApplication";
 import { AttachmentModel } from "@/lib/models/Attachment";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // POST add attachments to multiple applications
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const body = await request.json();
 
@@ -43,9 +49,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify all attachments exist
+    // Verify all attachments exist and belong to this account
     const attachments = await AttachmentModel.find({
-      _id: { $in: validAttachmentIds }
+      _id: { $in: validAttachmentIds },
+      userId: session.username,
     });
 
     if (attachments.length !== validAttachmentIds.length) {
@@ -61,6 +68,7 @@ export async function POST(request: NextRequest) {
         const application = await WorkspaceApplicationModel.findOne({
           _id: applicationId,
           kind: WORKSPACE_KIND_EMAIL,
+          userId: session.username,
         });
         
         if (!application) {
@@ -85,6 +93,7 @@ export async function POST(request: NextRequest) {
         const { syncApplicationAttachmentReferences } = await import("@/lib/utils/attachments");
         await syncApplicationAttachmentReferences(
           AttachmentModel,
+          session.username,
           applicationId,
           oldAttachmentIds,
           newAttachments

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
-    const attachment = await AttachmentModel.findById(id);
-    
+    const attachment = await AttachmentModel.findOne({ _id: id, userId: session.username });
+
     if (!attachment) {
       return NextResponse.json(
         { error: "Attachment not found" },
@@ -37,9 +43,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
-    const attachment = await AttachmentModel.findByIdAndDelete(id);
+    const attachment = await AttachmentModel.findOneAndDelete({ _id: id, userId: session.username });
 
     if (!attachment) {
       return NextResponse.json(

@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import { EmailTemplateModel } from "@/lib/models/EmailTemplate";
 import { AttachmentModel } from "@/lib/models/Attachment";
 import { DEFAULT_EMAIL_TEMPLATE, DEFAULT_EMAIL_SUBJECT } from "@/lib/constants/emailTemplate";
+import { getSession } from "@/lib/auth";
 import mongoose from "mongoose";
 
 export const dynamic = "force-dynamic";
@@ -10,16 +11,21 @@ export const dynamic = "force-dynamic";
 // GET template
 export async function GET() {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
-    let template = await EmailTemplateModel.findOne({ name: "default" });
-    
+    let template = await EmailTemplateModel.findOne({ name: session.username });
+
     console.log("[Template API] GET request - Template found:", !!template);
-    
+
     if (!template) {
       console.log("[Template API] Creating default template");
       // Create default template if it doesn't exist (using constant as fallback)
       template = await EmailTemplateModel.create({
-        name: "default",
+        name: session.username,
         content: DEFAULT_EMAIL_TEMPLATE,
         description: "Default email template",
         subject: DEFAULT_EMAIL_SUBJECT,
@@ -62,6 +68,11 @@ export async function GET() {
 // PUT update template
 export async function PUT(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const body = await request.json();
     const { content, description, subject, attachments } = body;
@@ -85,12 +96,12 @@ export async function PUT(request: NextRequest) {
     }
 
     // Find or create template
-    let template = await EmailTemplateModel.findOne({ name: "default" });
-    
+    let template = await EmailTemplateModel.findOne({ name: session.username });
+
     if (!template) {
       console.log("[Template API] Template not found, creating new one");
       template = await EmailTemplateModel.create({
-        name: "default",
+        name: session.username,
         content,
         description,
         subject,
@@ -136,7 +147,7 @@ export async function PUT(request: NextRequest) {
             // Old format: embedded objects - convert to IDs
             const { findOrCreateAttachment } = await import("@/lib/utils/attachments");
             const attachmentPromises = attachments.map(async (att: any) => {
-              return await findOrCreateAttachment(AttachmentModel, {
+              return await findOrCreateAttachment(AttachmentModel, session.username, {
                 filename: att.filename,
                 content: att.content,
                 contentType: att.contentType,
@@ -161,7 +172,7 @@ export async function PUT(request: NextRequest) {
         
         // Update attachment references
         const { syncTemplateAttachmentReferences } = await import("@/lib/utils/attachments");
-        await syncTemplateAttachmentReferences(AttachmentModel, "default", oldAttachmentIds, attachmentIdStrings);
+        await syncTemplateAttachmentReferences(AttachmentModel, session.username, session.username, oldAttachmentIds, attachmentIdStrings);
         
         console.log("[Template API] Setting attachments:", {
           count: attachmentIdStrings.length,
@@ -197,14 +208,14 @@ export async function PUT(request: NextRequest) {
           
           // Use native MongoDB update to completely bypass Mongoose schema
           await db.collection("emailtemplates").updateOne(
-            { name: "default" },
+            { name: session.username },
             { $set: updateData }
           );
-          
+
           console.log("[Template API] Direct MongoDB update completed");
-          
+
           // Reload the template to get the updated version
-          template = await EmailTemplateModel.findOne({ name: "default" });
+          template = await EmailTemplateModel.findOne({ name: session.username });
           if (!template) {
             throw new Error("Failed to reload template after update");
           }
@@ -218,7 +229,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Reload from database to verify what was actually saved
-    const savedTemplate = await EmailTemplateModel.findOne({ name: "default" });
+    const savedTemplate = await EmailTemplateModel.findOne({ name: session.username });
     console.log("[Template API] Template updated, raw template from DB:", {
       hasAttachments: !!savedTemplate?.attachments,
       attachmentsType: typeof savedTemplate?.attachments,

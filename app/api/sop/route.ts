@@ -9,14 +9,20 @@ import { sopSchema } from "@/lib/validations/sop";
 import { getErrorMessage } from "@/lib/types/errors";
 import type { ApiErrorResponse } from "@/lib/types/api";
 import { mergeSectionsToContent } from "@/lib/utils/sop";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // GET all SOPs (with optional application info for list display)
 export async function GET() {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
-    const sops = await SOPModel.find()
+    const sops = await SOPModel.find({ userId: session.username })
       .sort({ updatedAt: -1 })
       .populate("applicationId", "name university")
       .populate("admissionApplicationId", "universityName programName")
@@ -35,6 +41,11 @@ export async function GET() {
 // POST create new SOP
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const body = await request.json();
 
@@ -67,6 +78,7 @@ export async function POST(request: NextRequest) {
           : "") || "";
 
     const sop = await SOPModel.create({
+      userId: session.username,
       title: data.title.trim(),
       content: mergedContent,
       applicationId: data.applicationId ? new mongoose.Types.ObjectId(data.applicationId) : undefined,
@@ -85,7 +97,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const created = await SOPModel.findById(sop._id)
+    const created = await SOPModel.findOne({ _id: sop._id, userId: session.username })
       .populate("applicationId", "name university")
       .populate("admissionApplicationId", "universityName programName")
       .lean();

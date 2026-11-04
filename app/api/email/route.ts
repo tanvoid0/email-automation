@@ -1,66 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/smtp";
+import { getUserSmtpConfig } from "@/lib/utils/smtpConfig";
+import { getSession } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
+import { UserProfileModel } from "@/lib/models/UserProfile";
 import { TIMEOUT_CONFIG } from "@/lib/config/timeouts";
-import { APP_MOCK_EMAIL_DOMAIN } from "@/lib/constants/app";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30; // 30 seconds - allows time for SMTP operations and attachment fetching
 
-// Set to false to enable real email sending
-// When SMTP is configured, set this to false
-const MOCK_EMAIL = process.env.SMTP_HOST ? false : true;
-
 export async function GET() {
-  // Test email endpoint
-  const testEmail = process.env.SMTP_TEST_EMAIL;
-  
-  if (!testEmail) {
-    return NextResponse.json(
-      { error: "SMTP_TEST_EMAIL is not configured in environment variables" },
-      { status: 400 }
-    );
-  }
-
-  if (MOCK_EMAIL) {
-    if (process.env.NODE_ENV === "development") {
-      console.log("=".repeat(60));
-      console.log("📧 TEST EMAIL (MOCK MODE)");
-      console.log("=".repeat(60));
-      console.log("To:", testEmail);
-      console.log("Subject: Test Email - SMTP Configuration");
-      console.log("From:", process.env.SMTP_FROM || "[REDACTED]");
-      console.log("\nEmail Body:");
-      console.log("This is a test email to verify your SMTP configuration is working correctly.");
-      console.log("=".repeat(60));
-      console.log("✅ Test email would be sent successfully (MOCK MODE)");
-      console.log("=".repeat(60));
-    } else {
-      console.log(`[Mock Test Email] Would send to ${testEmail}`);
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Test email sent successfully (MOCK MODE)",
-      to: testEmail,
-      mocked: true,
-    });
+  // Test email endpoint - sends a test email to the logged-in user's own address
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    // Increased timeout for test emails (allows more time for slow connections)
+    const smtpConfig = await getUserSmtpConfig(session.username);
+    if (!smtpConfig) {
+      return NextResponse.json(
+        { error: "Email (SMTP) is not configured yet. Set it up in Settings first." },
+        { status: 400 }
+      );
+    }
+
+    await connectDB();
+    const profile = await UserProfileModel.findOne({ name: session.username }).lean();
+    const testEmail = profile?.email || smtpConfig.user;
+
     const timeoutMs = TIMEOUT_CONFIG.SMTP_TEST;
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error(`Request timeout after ${timeoutMs / 1000} seconds`)), timeoutMs);
     });
 
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[Email API] Sending test email to ${testEmail} (timeout: ${timeoutMs}ms)...`);
-      console.log(`[Email API] SMTP Config: ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}`);
-    }
-    
-    const emailPromise = sendEmail({
+    console.log(`[Email API] Sending test email to ${testEmail} (timeout: ${timeoutMs}ms)...`);
+
+    const emailPromise = sendEmail(smtpConfig, {
       to: testEmail,
       subject: "Test Email - SMTP Configuration",
       text: "This is a test email to verify your SMTP configuration is working correctly.\n\nIf you received this email, your SMTP settings are properly configured!",
@@ -92,6 +69,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   // Set a timeout for the entire request
   const timeoutMs = TIMEOUT_CONFIG.EMAIL_API_REQUEST;
   const timeoutPromise = new Promise((_, reject) => {
@@ -99,6 +81,14 @@ export async function POST(request: NextRequest) {
   });
 
   try {
+    const smtpConfig = await getUserSmtpConfig(session.username);
+    if (!smtpConfig) {
+      return NextResponse.json(
+        { error: "Email (SMTP) is not configured yet. Set it up in Settings first." },
+        { status: 400 }
+      );
+    }
+
     // Log request metadata
     const contentType = request.headers.get("content-type") || "unknown";
     const contentLength = request.headers.get("content-length");
@@ -115,18 +105,18 @@ export async function POST(request: NextRequest) {
     const textSize = text ? Buffer.byteLength(text, 'utf8') : 0;
     const htmlSize = html ? Buffer.byteLength(html, 'utf8') : 0;
     const emailBodySize = Math.max(textSize, htmlSize);
-    
+
     // Support both old format (full attachments) and new format (attachment IDs)
     let finalAttachments: any[] = [];
     let attachmentDetails: Array<{filename: string; size: number; sizeMB: string; contentType?: string}> = [];
     let totalAttachmentSize = 0;
-    
+
     // Priority: attachmentIds (new format) > attachments (old format for backward compatibility)
     if (attachmentIds && Array.isArray(attachmentIds) && attachmentIds.length > 0) {
       // New format: Fetch attachments from database by IDs
       console.log("[Email API] Fetching attachments by IDs:", attachmentIds);
       await connectDB();
-      
+
       // Filter valid ObjectIds
       const validIds = attachmentIds.filter((id: any): id is string => {
         if (typeof id === 'string') {
@@ -134,18 +124,19 @@ export async function POST(request: NextRequest) {
         }
         return false;
       });
-      
+
       if (validIds.length > 0) {
         const dbAttachments = await AttachmentModel.find({
-          _id: { $in: validIds }
+          _id: { $in: validIds },
+          userId: session.username,
         });
-        
+
         finalAttachments = dbAttachments.map(att => ({
           filename: att.filename,
           content: att.content,
           contentType: att.contentType,
         }));
-        
+
         attachmentDetails = dbAttachments.map((att: any) => {
           const contentSize = att.content ? Buffer.byteLength(att.content, 'base64') : 0;
           totalAttachmentSize += contentSize;
@@ -156,7 +147,7 @@ export async function POST(request: NextRequest) {
             contentType: att.contentType || 'unknown',
           };
         });
-        
+
         console.log("[Email API] Fetched attachments from database:", {
           requestedIds: validIds.length,
           found: dbAttachments.length,
@@ -214,49 +205,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (MOCK_EMAIL) {
-      // Mock email sending - logs to console instead of actually sending
-      // Note: In production, avoid logging full email content to protect privacy
-      if (process.env.NODE_ENV === "development") {
-        console.log("=".repeat(60));
-        console.log("📧 MOCK EMAIL SEND (Email sending is mocked)");
-        console.log("=".repeat(60));
-        console.log("To:", to);
-        console.log("Subject:", subject);
-        console.log("From:", process.env.SMTP_FROM || "[REDACTED]");
-        console.log("\nEmail Body:");
-        console.log(text || html);
-        if (finalAttachments && finalAttachments.length > 0) {
-          console.log("\nAttachments:", finalAttachments.map((a: any) => a.filename).join(", "));
-        }
-        console.log("=".repeat(60));
-        console.log("✅ Email would be sent successfully");
-        console.log("=".repeat(60));
-      } else {
-        // In production, only log minimal info
-        console.log(`[Mock Email] Would send to ${to}, subject: ${subject}`);
-      }
-
-      // Simulate a small delay
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      return NextResponse.json({
-        success: true,
-        messageId: `mock-${Date.now()}@${APP_MOCK_EMAIL_DOMAIN}`,
-        mocked: true,
-      });
-    }
-
     // Real email sending with timeout
     console.log(`[Email API] Starting email send to ${to}...`);
-    const emailPromise = sendEmail({
+    const emailPromise = sendEmail(smtpConfig, {
       to,
       subject,
       text,
       html,
       attachments: finalAttachments.length > 0 ? finalAttachments : undefined,
     });
-    
+
     try {
       const result = await Promise.race([emailPromise, timeoutPromise]) as any;
       console.log(`[Email API] Email sent successfully to ${to}`);
@@ -274,18 +232,17 @@ export async function POST(request: NextRequest) {
       errorStack: error.stack?.substring(0, 500), // First 500 chars of stack
       timestamp: new Date().toISOString(),
     });
-    
+
     // Check if it's a payload size error
     if (error.message?.includes("Entity Too Large") || error.message?.includes("PAYLOAD_TOO_LARGE") || error.message?.includes("413")) {
       console.error("[Email API] ❌ PAYLOAD TOO LARGE ERROR DETECTED");
       console.error("[Email API] This error typically occurs when the request size exceeds server limits (usually 4.5-6 MB)");
       console.error("[Email API] Check the payload size logs above to identify large attachments");
     }
-    
+
     return NextResponse.json(
       { error: error.message || "Failed to send email" },
       { status: 500 }
     );
   }
 }
-

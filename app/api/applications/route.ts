@@ -9,15 +9,22 @@ import { applicationSchema } from "@/lib/validations/application";
 import { attachmentSchema } from "@/lib/validations/attachment";
 import { getErrorMessage } from "@/lib/types/errors";
 import type { ApiErrorResponse } from "@/lib/types/api";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // GET all applications
 export async function GET() {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const applications = await WorkspaceApplicationModel.find({
       kind: WORKSPACE_KIND_EMAIL,
+      userId: session.username,
     }).sort({ createdAt: -1 });
     return NextResponse.json(applications);
   } catch (error: unknown) {
@@ -33,8 +40,13 @@ export async function GET() {
 // POST create new application
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
-    
+
     const body = await request.json();
 
     // Validate with Zod
@@ -77,7 +89,7 @@ export async function POST(request: NextRequest) {
             throw new Error(`Invalid attachment: ${validationResult.error.message}`);
           }
           // Use findOrCreateAttachment to avoid duplicates
-          return await findOrCreateAttachment(AttachmentModel, validationResult.data);
+          return await findOrCreateAttachment(AttachmentModel, session.username, validationResult.data);
         }
         return null; // Invalid format
       });
@@ -90,6 +102,7 @@ export async function POST(request: NextRequest) {
     // Create application
     const application = await WorkspaceApplicationModel.create({
       kind: WORKSPACE_KIND_EMAIL,
+      userId: session.username,
       name: body.name.trim(),
       university: body.university.trim(),
       email: body.email.trim(),
@@ -101,7 +114,7 @@ export async function POST(request: NextRequest) {
     // Update attachment references
     if (attachmentIds.length > 0) {
       const { syncApplicationAttachmentReferences } = await import("@/lib/utils/attachments");
-      await syncApplicationAttachmentReferences(AttachmentModel, application._id.toString(), [], attachmentIds);
+      await syncApplicationAttachmentReferences(AttachmentModel, session.username, application._id.toString(), [], attachmentIds);
     }
 
     return NextResponse.json(application, { status: 201 });

@@ -45,22 +45,23 @@ export function formatFileSize(bytes: number): string {
 }
 
 /**
- * Find dangling attachments (not referenced by any application or template)
+ * Find dangling attachments (not referenced by any application or template), scoped to one account.
  * Verifies against actual applications and templates, not just stored reference fields
  * This ensures accuracy even if reference fields are out of sync
  */
 export async function findDanglingAttachments(
   AttachmentModel: any,
+  userId: string,
   /** Unified workspace model (`WorkspaceApplicationModel`) — all kinds share `attachments`. */
   WorkspaceApplicationModel: any,
   EmailTemplateModel?: any
 ): Promise<string[]> {
-  // Get all attachment IDs
-  const allAttachments = await AttachmentModel.find({}, '_id').lean();
+  // Get all attachment IDs owned by this account
+  const allAttachments = await AttachmentModel.find({ userId }, '_id').lean();
   const allAttachmentIds = new Set(allAttachments.map((att: any) => att._id.toString()));
 
-  // Get all attachment IDs referenced by workspace applications (email + admission)
-  const applications = await WorkspaceApplicationModel.find({}, "attachments").lean();
+  // Get all attachment IDs referenced by this account's workspace applications (email + admission)
+  const applications = await WorkspaceApplicationModel.find({ userId }, "attachments").lean();
   const referencedByApplications = new Set<string>();
   applications.forEach((app: any) => {
     if (app.attachments && Array.isArray(app.attachments)) {
@@ -70,10 +71,10 @@ export async function findDanglingAttachments(
     }
   });
 
-  // Get all attachment IDs referenced by templates
+  // Get all attachment IDs referenced by this account's template (one per account, keyed by username)
   const referencedByTemplates = new Set<string>();
   if (EmailTemplateModel) {
-    const templates = await EmailTemplateModel.find({}, 'attachments').lean();
+    const templates = await EmailTemplateModel.find({ name: userId }, 'attachments').lean();
     templates.forEach((template: any) => {
       if (template.attachments && Array.isArray(template.attachments)) {
         template.attachments.forEach((id: any) => {
@@ -91,30 +92,33 @@ export async function findDanglingAttachments(
   const danglingIds = Array.from(allAttachmentIds).filter((id): id is string => {
     return typeof id === 'string' && !referencedByApplications.has(id) && !referencedByTemplates.has(id);
   });
-  
+
   return danglingIds;
 }
 
 /**
- * Delete dangling attachments
+ * Delete dangling attachments, scoped to one account.
  */
 export async function cleanupDanglingAttachments(
   AttachmentModel: any,
+  userId: string,
   WorkspaceApplicationModel: any,
   EmailTemplateModel?: any
 ): Promise<{ deletedCount: number; deletedIds: string[] }> {
   const danglingIds = await findDanglingAttachments(
     AttachmentModel,
+    userId,
     WorkspaceApplicationModel,
     EmailTemplateModel
   );
-  
+
   if (danglingIds.length === 0) {
     return { deletedCount: 0, deletedIds: [] };
   }
 
   const result = await AttachmentModel.deleteMany({
-    _id: { $in: danglingIds }
+    _id: { $in: danglingIds },
+    userId,
   });
 
   return {
@@ -124,12 +128,13 @@ export async function cleanupDanglingAttachments(
 }
 
 /**
- * Find or create an attachment, avoiding duplicates based on content
+ * Find or create an attachment for one account, avoiding duplicates based on content.
  * Returns the attachment ID (existing or newly created)
- * Only creates a new attachment if one with the same content doesn't already exist
+ * Only creates a new attachment if one with the same content doesn't already exist for this account
  */
 export async function findOrCreateAttachment(
   AttachmentModel: any,
+  userId: string,
   attachmentData: {
     filename: string;
     content: string;
@@ -137,11 +142,12 @@ export async function findOrCreateAttachment(
     size?: number;
   }
 ): Promise<string> {
-  // First, try to find an existing attachment with the same content
+  // First, try to find an existing attachment with the same content, owned by this account.
   // Content is the unique identifier - same content = same file, regardless of filename
   // We check by content first (most important), then optionally by filename
   const existing = await AttachmentModel.findOne({
     content: attachmentData.content,
+    userId,
   }).select('_id');
 
   if (existing) {
@@ -153,6 +159,7 @@ export async function findOrCreateAttachment(
   // If not found, this is a truly new attachment - create it
   const newAttachment = await AttachmentModel.create({
     ...attachmentData,
+    userId,
     referencedByApplications: [],
     referencedByTemplates: [],
   });
@@ -160,15 +167,16 @@ export async function findOrCreateAttachment(
 }
 
 /**
- * Add a reference from an application to an attachment
+ * Add a reference from an application to an attachment (scoped to the owning account)
  */
 export async function addApplicationReference(
   AttachmentModel: any,
+  userId: string,
   attachmentId: string,
   applicationId: string
 ): Promise<void> {
-  await AttachmentModel.findByIdAndUpdate(
-    attachmentId,
+  await AttachmentModel.findOneAndUpdate(
+    { _id: attachmentId, userId },
     {
       $addToSet: { referencedByApplications: applicationId }
     }
@@ -176,15 +184,16 @@ export async function addApplicationReference(
 }
 
 /**
- * Remove a reference from an application to an attachment
+ * Remove a reference from an application to an attachment (scoped to the owning account)
  */
 export async function removeApplicationReference(
   AttachmentModel: any,
+  userId: string,
   attachmentId: string,
   applicationId: string
 ): Promise<void> {
-  await AttachmentModel.findByIdAndUpdate(
-    attachmentId,
+  await AttachmentModel.findOneAndUpdate(
+    { _id: attachmentId, userId },
     {
       $pull: { referencedByApplications: applicationId }
     }
@@ -192,15 +201,16 @@ export async function removeApplicationReference(
 }
 
 /**
- * Add a reference from a template to an attachment
+ * Add a reference from a template to an attachment (scoped to the owning account)
  */
 export async function addTemplateReference(
   AttachmentModel: any,
+  userId: string,
   attachmentId: string,
-  templateName: string = "default"
+  templateName: string
 ): Promise<void> {
-  await AttachmentModel.findByIdAndUpdate(
-    attachmentId,
+  await AttachmentModel.findOneAndUpdate(
+    { _id: attachmentId, userId },
     {
       $addToSet: { referencedByTemplates: templateName }
     }
@@ -208,12 +218,13 @@ export async function addTemplateReference(
 }
 
 /**
- * Remove a reference from a template to an attachment
+ * Remove a reference from a template to an attachment (scoped to the owning account)
  */
 export async function removeTemplateReference(
   AttachmentModel: any,
+  userId: string,
   attachmentId: string,
-  templateName: string = "default"
+  templateName: string
 ): Promise<void> {
   // Validate that attachmentId is a valid ObjectId string
   if (typeof attachmentId !== 'string' || !/^[0-9a-fA-F]{24}$/.test(attachmentId.trim())) {
@@ -221,8 +232,8 @@ export async function removeTemplateReference(
     return;
   }
 
-  await AttachmentModel.findByIdAndUpdate(
-    attachmentId.trim(),
+  await AttachmentModel.findOneAndUpdate(
+    { _id: attachmentId.trim(), userId },
     {
       $pull: { referencedByTemplates: templateName }
     }
@@ -230,10 +241,11 @@ export async function removeTemplateReference(
 }
 
 /**
- * Update all attachment references based on an application's attachment list
+ * Update all attachment references based on an application's attachment list (scoped to the owning account)
  */
 export async function syncApplicationAttachmentReferences(
   AttachmentModel: any,
+  userId: string,
   applicationId: string,
   oldAttachmentIds: string[],
   newAttachmentIds: string[]
@@ -248,29 +260,30 @@ export async function syncApplicationAttachmentReferences(
 
   // Remove references
   for (const attachmentId of toRemove) {
-    await removeApplicationReference(AttachmentModel, attachmentId, applicationId);
+    await removeApplicationReference(AttachmentModel, userId, attachmentId, applicationId);
   }
 
   // Add references
   for (const attachmentId of toAdd) {
-    await addApplicationReference(AttachmentModel, attachmentId, applicationId);
+    await addApplicationReference(AttachmentModel, userId, attachmentId, applicationId);
   }
 }
 
 /**
- * Update all attachment references based on a template's attachment list
+ * Update all attachment references based on a template's attachment list (scoped to the owning account)
  */
 export async function syncTemplateAttachmentReferences(
   AttachmentModel: any,
+  userId: string,
   templateName: string,
   oldAttachmentIds: string[],
   newAttachmentIds: string[]
 ): Promise<void> {
   // Filter out invalid IDs (objects, null, etc.) - only keep valid ObjectId strings
-  const validOldIds = oldAttachmentIds.filter((id): id is string => 
+  const validOldIds = oldAttachmentIds.filter((id): id is string =>
     typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id.trim())
   );
-  const validNewIds = newAttachmentIds.filter((id): id is string => 
+  const validNewIds = newAttachmentIds.filter((id): id is string =>
     typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id.trim())
   );
 
@@ -284,21 +297,22 @@ export async function syncTemplateAttachmentReferences(
 
   // Remove references
   for (const attachmentId of toRemove) {
-    await removeTemplateReference(AttachmentModel, attachmentId, templateName);
+    await removeTemplateReference(AttachmentModel, userId, attachmentId, templateName);
   }
 
   // Add references
   for (const attachmentId of toAdd) {
-    await addTemplateReference(AttachmentModel, attachmentId, templateName);
+    await addTemplateReference(AttachmentModel, userId, attachmentId, templateName);
   }
 }
 
 /**
- * Remove invalid attachment IDs from applications and templates
+ * Remove invalid attachment IDs from applications and templates, scoped to one account.
  * This cleans up dangling references where attachment IDs point to non-existent attachments
  */
 export async function cleanupInvalidAttachmentReferences(
   AttachmentModel: any,
+  userId: string,
   WorkspaceApplicationModel: any,
   EmailTemplateModel?: any
 ): Promise<{
@@ -306,16 +320,17 @@ export async function cleanupInvalidAttachmentReferences(
   templatesCleaned: number;
   removedIds: string[];
 }> {
-  // Get all valid attachment IDs
-  const allAttachments = await AttachmentModel.find({}, '_id').lean();
+  // Get all valid attachment IDs owned by this account
+  const allAttachments = await AttachmentModel.find({ userId }, '_id').lean();
   const validAttachmentIds = new Set(allAttachments.map((att: any) => att._id.toString()));
 
   let applicationsCleaned = 0;
   let templatesCleaned = 0;
   const removedIds: string[] = [];
 
-  // Clean up workspace applications (email + admission)
+  // Clean up this account's workspace applications (email + admission)
   const applications = await WorkspaceApplicationModel.find({
+    userId,
     attachments: { $exists: true, $ne: [] },
   }).lean();
   for (const app of applications) {
@@ -324,44 +339,45 @@ export async function cleanupInvalidAttachmentReferences(
         const idStr = typeof id === 'string' ? id : id.toString();
         return validAttachmentIds.has(idStr);
       });
-      
+
       if (validIds.length !== app.attachments.length) {
         // Some IDs were invalid, update the application
         const invalidIds = app.attachments.filter((id: any) => {
           const idStr = typeof id === 'string' ? id : id.toString();
           return !validAttachmentIds.has(idStr);
         }).map((id: any) => id.toString());
-        
+
         removedIds.push(...invalidIds);
-        await WorkspaceApplicationModel.findByIdAndUpdate(app._id, {
-          $set: { attachments: validIds }
-        });
+        await WorkspaceApplicationModel.updateOne(
+          { _id: app._id, userId },
+          { $set: { attachments: validIds } }
+        );
         applicationsCleaned++;
       }
     }
   }
 
-  // Clean up templates
+  // Clean up this account's template (one per account, keyed by username)
   if (EmailTemplateModel) {
-    const templates = await EmailTemplateModel.find({ attachments: { $exists: true, $ne: [] } }).lean();
+    const templates = await EmailTemplateModel.find({ name: userId, attachments: { $exists: true, $ne: [] } }).lean();
     for (const template of templates) {
       if (template.attachments && Array.isArray(template.attachments)) {
         const validIds = template.attachments.filter((id: any) => {
           const idStr = typeof id === 'string' ? id : id.toString();
           return /^[0-9a-fA-F]{24}$/.test(idStr) && validAttachmentIds.has(idStr);
         });
-        
+
         if (validIds.length !== template.attachments.length) {
           // Some IDs were invalid, update the template
           const invalidIds = template.attachments.filter((id: any) => {
             const idStr = typeof id === 'string' ? id : id.toString();
             return !(/^[0-9a-fA-F]{24}$/.test(idStr) && validAttachmentIds.has(idStr));
           }).map((id: any) => id.toString());
-          
+
           removedIds.push(...invalidIds);
           // Use updateOne to bypass Mongoose casting issues
           await EmailTemplateModel.updateOne(
-            { _id: template._id },
+            { _id: template._id, name: userId },
             { $set: { attachments: validIds } }
           );
           templatesCleaned++;
@@ -376,4 +392,3 @@ export async function cleanupInvalidAttachmentReferences(
     removedIds: Array.from(new Set(removedIds)) // Remove duplicates
   };
 }
-

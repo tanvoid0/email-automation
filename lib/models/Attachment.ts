@@ -12,6 +12,10 @@ import mongoose from "mongoose";
   }
 })
 export class Attachment {
+  // Owning account's username
+  @prop({ required: true, index: true })
+  public userId!: string;
+
   @prop({ required: true })
   public filename!: string;
 

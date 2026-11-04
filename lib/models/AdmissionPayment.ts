@@ -13,6 +13,10 @@ import type { AdmissionPaymentStatus } from "@/lib/types/admissionPayment";
   },
 })
 export class AdmissionPayment {
+  // Owning account's username
+  @prop({ required: true, index: true })
+  public userId!: string;
+
   @prop({ required: true, type: mongoose.Schema.Types.ObjectId, ref: "WorkspaceApplication", index: true })
   public workspaceApplicationId!: mongoose.Types.ObjectId;
 

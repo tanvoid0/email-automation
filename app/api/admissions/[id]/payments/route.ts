@@ -7,6 +7,7 @@ import {
 } from "@/lib/models/WorkspaceApplication";
 import { AdmissionPaymentModel } from "@/lib/models/AdmissionPayment";
 import { admissionPaymentCreateSchema } from "@/lib/validations/admissionPayment";
+import { getSession } from "@/lib/auth";
 import { getErrorMessage } from "@/lib/types/errors";
 import type { ApiErrorResponse } from "@/lib/types/api";
 import { leanPaymentToRecord } from "@/lib/utils/admission-payments";
@@ -24,11 +25,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     await connectDB();
     const { id } = await params;
     const admission = await WorkspaceApplicationModel.findOne({
       _id: id,
       kind: WORKSPACE_KIND_ADMISSION,
+      userId: session.username,
     })
       .select("_id")
       .lean();
@@ -37,6 +43,7 @@ export async function GET(
     }
     const rows = await AdmissionPaymentModel.find({
       workspaceApplicationId: new mongoose.Types.ObjectId(id),
+      userId: session.username,
     })
       .sort({ createdAt: 1 })
       .lean();
@@ -54,11 +61,16 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     await connectDB();
     const { id } = await params;
     const admission = await WorkspaceApplicationModel.findOne({
       _id: id,
       kind: WORKSPACE_KIND_ADMISSION,
+      userId: session.username,
     })
       .select("_id")
       .lean();
@@ -87,6 +99,7 @@ export async function POST(
 
     const doc = await AdmissionPaymentModel.create({
       workspaceApplicationId: new mongoose.Types.ObjectId(id),
+      userId: session.username,
       label,
       amountText: d.amountText,
       amountValue: d.amountValue,

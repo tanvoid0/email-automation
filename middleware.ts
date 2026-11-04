@@ -32,8 +32,8 @@ function parseSession(sessionCookie: string): AuthSession | null {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow access to login page and API auth routes
-  if (pathname === "/login" || pathname.startsWith("/api/auth")) {
+  // Allow access to login/signup pages and API auth routes
+  if (pathname === "/login" || pathname === "/signup" || pathname.startsWith("/api/auth")) {
     return NextResponse.next();
   }
 

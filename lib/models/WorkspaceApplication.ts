@@ -34,6 +34,10 @@ export type EmailOutreachStatus = "pending" | "sending" | "sent" | "error" | "ca
   },
 })
 export class WorkspaceApplication {
+  // Owning account's username
+  @prop({ required: true, index: true })
+  public userId!: string;
+
   @prop({
     required: true,
     enum: [WORKSPACE_KIND_EMAIL, WORKSPACE_KIND_ADMISSION],

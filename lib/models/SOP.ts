@@ -17,6 +17,10 @@ export interface SOPSectionEntry {
   },
 })
 export class SOP {
+  // Owning account's username
+  @prop({ required: true, index: true })
+  public userId!: string;
+
   @prop({ required: true })
   public title!: string;
 

@@ -24,7 +24,8 @@ class TemplateAttachment {
   }
 })
 export class EmailTemplate {
-  @prop({ required: true, unique: true, default: "default" })
+  // Owning account's username — one template per account (reuses the old "default" singleton key)
+  @prop({ required: true, unique: true })
   public name!: string;
 
   @prop({ required: true })

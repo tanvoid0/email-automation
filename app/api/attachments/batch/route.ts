@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 // POST get multiple attachments by IDs
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const body = await request.json();
     const { ids } = body;
@@ -39,7 +45,8 @@ export async function POST(request: NextRequest) {
     }
 
     const attachments = await AttachmentModel.find({
-      _id: { $in: validIds }
+      _id: { $in: validIds },
+      userId: session.username,
     });
 
     return NextResponse.json(attachments);

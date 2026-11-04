@@ -4,6 +4,7 @@ import { SopTemplateModel } from "@/lib/models/SopTemplate";
 import { sopTemplateUpdateSchema } from "@/lib/validations/sopTemplate";
 import { getErrorMessage } from "@/lib/types/errors";
 import type { ApiErrorResponse } from "@/lib/types/api";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +13,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
-    const template = await SopTemplateModel.findById(id).lean();
+    const template = await SopTemplateModel.findOne({ _id: id, userId: session.username }).lean();
     if (!template) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
@@ -33,10 +39,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
     const body = await request.json();
-    const template = await SopTemplateModel.findById(id);
+    const template = await SopTemplateModel.findOne({ _id: id, userId: session.username });
     if (!template) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
@@ -62,7 +73,7 @@ export async function PATCH(
       }));
     }
     await template.save();
-    const updated = await SopTemplateModel.findById(id).lean();
+    const updated = await SopTemplateModel.findOne({ _id: id, userId: session.username }).lean();
     return NextResponse.json(updated);
   } catch (error: unknown) {
     const errorMessage = getErrorMessage(error);
@@ -78,9 +89,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
-    const template = await SopTemplateModel.findByIdAndDelete(id);
+    const template = await SopTemplateModel.findOneAndDelete({ _id: id, userId: session.username });
     if (!template) {
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
