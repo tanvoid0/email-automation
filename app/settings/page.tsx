@@ -33,6 +33,7 @@ import { useTemplate } from "@/lib/hooks/useTemplate";
 import { useEmailQueue } from "@/lib/hooks/useEmailQueue";
 import { cn } from "@/lib/utils";
 import { AdmissionSettingsCard } from "@/components/settings/AdmissionSettingsCard";
+import { BrowserNotificationsCard } from "@/components/settings/BrowserNotificationsCard";
 import { SMTP_PROVIDERS, SMTP_PRESETS, type SmtpProvider } from "@/lib/constants/smtpPresets";
 
 interface TemplateFormData {
@@ -685,6 +686,8 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <BrowserNotificationsCard />
 
         <AdmissionSettingsCard
           alternateSettingsHref="/admissions/settings"

@@ -5,10 +5,12 @@ import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { NotificationDialog } from "./NotificationDialog";
+import { useBrowserNotifications } from "@/lib/hooks/useBrowserNotifications";
 
 export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  useBrowserNotifications();
 
   // Poll unread count every 8 seconds
   useEffect(() => {

@@ -47,7 +47,8 @@ export const config = {
      * - public folder files
      */
     // manifest.webmanifest: browsers fetch it without cookies, so it must stay public
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // sw.js: service worker script must be fetchable without a redirect to /login
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
 
