@@ -1,35 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifySession } from "@/lib/session-token";
 
 const SESSION_COOKIE_NAME = "auth_session";
-const SESSION_DURATION_DAYS = 30;
-const SESSION_DURATION_MS = SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000;
 
-interface AuthSession {
-  username: string;
-  expiresAt: number;
-}
-
-/**
- * Edge-compatible session parser for middleware
- */
-function parseSession(sessionCookie: string): AuthSession | null {
-  try {
-    // Use atob for base64 decoding in Edge Runtime
-    const decoded = atob(sessionCookie);
-    const session: AuthSession = JSON.parse(decoded);
-    
-    // Check if session is expired
-    if (Date.now() > session.expiresAt) {
-      return null;
-    }
-    
-    return session;
-  } catch {
-    return null;
-  }
-}
-
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow access to login/signup pages and API auth routes
@@ -48,7 +22,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Validate session
-  const session = parseSession(sessionCookie.value);
+  const session = await verifySession(sessionCookie.value);
 
   if (!session) {
     // Invalid or expired session, redirect to login

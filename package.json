@@ -9,7 +9,8 @@
     "lint": "next lint",
     "migrate:workspace-applications": "tsx scripts/migrate-workspace-applications.ts",
     "migrate:admission-payments": "tsx scripts/migrate-admission-payments.ts",
-    "migrate:multiuser": "tsx scripts/migrate-to-multiuser.ts"
+    "migrate:multiuser": "tsx scripts/migrate-to-multiuser.ts",
+    "check:session": "tsx scripts/check-session-token.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

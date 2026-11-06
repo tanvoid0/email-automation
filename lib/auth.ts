@@ -3,42 +3,19 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import connectDB from "@/lib/mongodb";
 import { UserModel } from "@/lib/models/User";
+import { signSession, verifySession, type AuthSession } from "@/lib/session-token";
+
+export type { AuthSession };
 
 const SESSION_COOKIE_NAME = "auth_session";
 const SESSION_DURATION_DAYS = 30;
 const SESSION_DURATION_MS = SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000;
 
-export interface AuthSession {
-  username: string;
-  expiresAt: number;
-}
-
 /**
- * Creates a session cookie with 30-day expiration
+ * Creates a signed session token with 30-day expiration
  */
-export function createSession(username: string): string {
-  const expiresAt = Date.now() + SESSION_DURATION_MS;
-  const session: AuthSession = { username, expiresAt };
-  return Buffer.from(JSON.stringify(session)).toString("base64");
-}
-
-/**
- * Validates and parses the session cookie
- */
-export function parseSession(sessionCookie: string): AuthSession | null {
-  try {
-    const decoded = Buffer.from(sessionCookie, "base64").toString("utf-8");
-    const session: AuthSession = JSON.parse(decoded);
-    
-    // Check if session is expired
-    if (Date.now() > session.expiresAt) {
-      return null;
-    }
-    
-    return session;
-  } catch {
-    return null;
-  }
+export function createSession(username: string): Promise<string> {
+  return signSession({ username, expiresAt: Date.now() + SESSION_DURATION_MS });
 }
 
 /**
@@ -52,7 +29,7 @@ export async function getSession(): Promise<AuthSession | null> {
     return null;
   }
   
-  return parseSession(sessionCookie.value);
+  return verifySession(sessionCookie.value);
 }
 
 /**
