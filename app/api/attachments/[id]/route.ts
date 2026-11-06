@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { AttachmentModel } from "@/lib/models/Attachment";
+import { WorkspaceApplicationModel } from "@/lib/models/WorkspaceApplication";
+import { EmailTemplateModel } from "@/lib/models/EmailTemplate";
+import { repointAttachmentReferences } from "@/lib/utils/attachments";
 import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -50,16 +53,22 @@ export async function DELETE(
 
     await connectDB();
     const { id } = await params;
-    const attachment = await AttachmentModel.findOneAndDelete({ _id: id, userId: session.username });
-
-    if (!attachment) {
-      return NextResponse.json(
-        { error: "Attachment not found" },
-        { status: 404 }
-      );
+    const owned = await AttachmentModel.exists({ _id: id, userId: session.username });
+    if (!owned) {
+      return NextResponse.json({ error: "Attachment not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ message: "Attachment deleted successfully" });
+    // Detach before deleting: a failure in between leaves an unused file, never a broken reference.
+    const detachedFrom = await repointAttachmentReferences(
+      WorkspaceApplicationModel,
+      EmailTemplateModel,
+      session.username,
+      id,
+      null
+    );
+    await AttachmentModel.deleteOne({ _id: id, userId: session.username });
+
+    return NextResponse.json({ message: "Attachment deleted", detachedFrom });
   } catch (error: any) {
     console.error("Error deleting attachment:", error);
     return NextResponse.json(

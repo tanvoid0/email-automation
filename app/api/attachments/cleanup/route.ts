@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
     
     const body = await request.json().catch(() => ({}));
     const { cleanupReferences = true, cleanupDangling = true } = body;
+    const ids: string[] | undefined = Array.isArray(body.ids) ? body.ids.map(String) : undefined;
     
     const results: any = {};
     
@@ -40,7 +41,8 @@ export async function POST(request: NextRequest) {
         AttachmentModel,
         session.username,
         WorkspaceApplicationModel,
-        EmailTemplateModel
+        EmailTemplateModel,
+        ids
       );
       results.dangling = danglingResult;
     }

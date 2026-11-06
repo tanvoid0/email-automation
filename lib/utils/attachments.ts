@@ -103,14 +103,20 @@ export async function cleanupDanglingAttachments(
   AttachmentModel: any,
   userId: string,
   WorkspaceApplicationModel: any,
-  EmailTemplateModel?: any
+  EmailTemplateModel?: any,
+  /** Restrict deletion to these IDs (still re-checked as dangling server-side). */
+  onlyIds?: string[]
 ): Promise<{ deletedCount: number; deletedIds: string[] }> {
-  const danglingIds = await findDanglingAttachments(
+  let danglingIds = await findDanglingAttachments(
     AttachmentModel,
     userId,
     WorkspaceApplicationModel,
     EmailTemplateModel
   );
+  if (onlyIds) {
+    const allowed = new Set(onlyIds.map(String));
+    danglingIds = danglingIds.filter((id) => allowed.has(id));
+  }
 
   if (danglingIds.length === 0) {
     return { deletedCount: 0, deletedIds: [] };
@@ -125,6 +131,35 @@ export async function cleanupDanglingAttachments(
     deletedCount: result.deletedCount || 0,
     deletedIds: danglingIds
   };
+}
+
+/**
+ * Re-point every reference to `fromId` in this account's applications and email template at `toId`,
+ * or just remove it when `toId` is null. Returns how many documents changed.
+ * ponytail: leaves the denormalized Attachment.referencedBy* fields alone — nothing reads them for
+ * decisions any more (usage + cleanup read the applications/template directly); migrate-references resyncs them.
+ */
+export async function repointAttachmentReferences(
+  WorkspaceApplicationModel: any,
+  EmailTemplateModel: any,
+  userId: string,
+  fromId: string,
+  toId: string | null
+): Promise<number> {
+  const appFilter = { userId, attachments: fromId };
+  const templateFilter = { name: userId, attachments: fromId };
+  if (toId) {
+    // Add first so a document that already holds toId doesn't end up with it twice.
+    await Promise.all([
+      WorkspaceApplicationModel.updateMany(appFilter, { $addToSet: { attachments: toId } }),
+      EmailTemplateModel.updateMany(templateFilter, { $addToSet: { attachments: toId } }),
+    ]);
+  }
+  const [apps, templates] = await Promise.all([
+    WorkspaceApplicationModel.updateMany(appFilter, { $pull: { attachments: fromId } }),
+    EmailTemplateModel.updateMany(templateFilter, { $pull: { attachments: fromId } }),
+  ]);
+  return (apps.modifiedCount ?? 0) + (templates.modifiedCount ?? 0);
 }
 
 /**
