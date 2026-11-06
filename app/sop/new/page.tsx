@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Save, Loader2 } from "lucide-react";
+import { PageHeader } from "@/app/components/PageHeader";
+import { Save, Loader2 } from "lucide-react";
 import type { SOPSectionEntry } from "@/lib/types/sop";
 import type { TemplateSection } from "@/lib/types/sopTemplate";
 
@@ -196,28 +197,18 @@ export default function NewSOPPage() {
   const cancelHref = admissionApplicationId ? `/admissions/${admissionApplicationId}` : "/sop";
 
   return (
-    <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Link href={backHref}>
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">New Statement of Purpose</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Create an SOP. Use a template for sectioned structure or write freeform.
-            </p>
-            {admissionApplicationId && (
-              <p className="text-sm text-muted-foreground mt-2 rounded-md border bg-muted/40 px-3 py-2">
-                This SOP will be attached to the admission application when you create it (replacing any previously
-                linked SOP for that application).
-              </p>
-            )}
-          </div>
-        </div>
+      <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title="New Statement of Purpose"
+          description="Create an SOP. Use a template for sectioned structure or write freeform."
+          backHref={backHref}
+        />
+        {admissionApplicationId && (
+          <p className="text-sm text-muted-foreground rounded-md border bg-muted/40 px-3 py-2">
+            This SOP will be attached to the admission application when you create it (replacing any previously
+            linked SOP for that application).
+          </p>
+        )}
 
         <form onSubmit={onSubmit}>
           <Card className="mb-6">
@@ -334,7 +325,7 @@ export default function NewSOPPage() {
             </Card>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
               {isSubmitting ? (
                 <>
@@ -356,6 +347,5 @@ export default function NewSOPPage() {
           </div>
         </form>
       </div>
-    </main>
   );
 }

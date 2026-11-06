@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Download, FileText, Image as ImageIcon, Calendar, HardDrive, File } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/app/components/PageHeader";
 import { formatFileSize } from "@/lib/utils/attachments";
 
 interface Attachment {
@@ -54,7 +55,7 @@ export default function ViewAttachmentPage() {
         }
       } catch (error: any) {
         toast.error(`Error loading attachment: ${error.message}`);
-        router.push("/");
+        router.push("/attachments");
       } finally {
         setIsLoading(false);
       }
@@ -97,67 +98,43 @@ export default function ViewAttachmentPage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center h-[60vh]">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Loading attachment...</p>
-            </div>
-          </div>
+      <div className="flex min-h-[50dvh] items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading attachment...</p>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (!attachment) {
     return (
-      <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center h-[60vh]">
-            <div className="text-center">
-              <p className="text-lg font-medium mb-2">Attachment not found</p>
-              <Button onClick={() => router.push("/")} variant="outline">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Go Back
-              </Button>
-            </div>
-          </div>
+      <div className="flex min-h-[50dvh] items-center justify-center p-4">
+        <div className="text-center">
+          <p className="text-lg font-medium mb-2">Attachment not found</p>
+          <Button onClick={() => router.push("/attachments")} variant="outline">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Attachments
+          </Button>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.back()}
-              className="flex-shrink-0"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
+    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title={<span className="break-all">{attachment.filename}</span>}
+          description="Attachment Details"
+          backHref="/attachments"
+          backLabel="Attachments"
+          actions={
+            <Button onClick={handleDownload}>
+              <Download className="h-4 w-4 mr-2" />
+              Download
             </Button>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl font-bold truncate">{attachment.filename}</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Attachment Details
-              </p>
-            </div>
-          </div>
-          <Button
-            onClick={handleDownload}
-            className="bg-primary hover:bg-primary/90 flex-shrink-0"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Download
-          </Button>
-        </div>
+          }
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Preview Section - Takes 2 columns on large screens */}
@@ -177,7 +154,7 @@ export default function ViewAttachmentPage() {
               </CardHeader>
               <CardContent>
                 {previewUrl ? (
-                  <div className="w-full h-[calc(100vh-300px)] min-h-[500px] flex items-center justify-center bg-muted/50 rounded border">
+                  <div className="w-full h-[60dvh] min-h-[320px] lg:h-[calc(100vh-300px)] lg:min-h-[500px] flex items-center justify-center bg-muted/50 rounded border">
                     {isPDF ? (
                       <iframe
                         src={previewUrl}
@@ -193,7 +170,7 @@ export default function ViewAttachmentPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="w-full h-[calc(100vh-300px)] min-h-[500px] flex flex-col items-center justify-center bg-muted/50 rounded border p-8 text-center">
+                  <div className="w-full h-[60dvh] min-h-[320px] lg:h-[calc(100vh-300px)] lg:min-h-[500px] flex flex-col items-center justify-center bg-muted/50 rounded border p-8 text-center">
                     <File className="h-12 w-12 text-muted-foreground mb-4" />
                     <p className="text-muted-foreground mb-2">Preview not available</p>
                     <p className="text-sm text-muted-foreground">
@@ -201,7 +178,7 @@ export default function ViewAttachmentPage() {
                     </p>
                     <Button
                       onClick={handleDownload}
-                      className="mt-4 bg-primary hover:bg-primary/90"
+                      className="mt-4"
                     >
                       <Download className="h-4 w-4 mr-2" />
                       Download to View
@@ -286,8 +263,7 @@ export default function ViewAttachmentPage() {
             </Card>
           </div>
         </div>
-      </div>
-    </main>
+    </div>
   );
 }
 

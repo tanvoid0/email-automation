@@ -459,7 +459,7 @@ export function ApplicationList({
       case "sending":
         return <Clock className="h-4 w-4 text-blue-500 animate-spin" />;
       case "cancelled":
-        return <Ban className="h-4 w-4 text-gray-500" />;
+        return <Ban className="h-4 w-4 text-muted-foreground" />;
       default:
         return null;
     }
@@ -740,6 +740,7 @@ export function ApplicationList({
                           size="sm"
                           variant="outline"
                           title="Send email"
+                          aria-label="Send email"
                           className="h-8 w-8 p-0 border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-950/30"
                         >
                           <Send className="h-4 w-4" />
@@ -751,6 +752,7 @@ export function ApplicationList({
                           size="sm"
                           variant="outline"
                           title="Retry sending email"
+                          aria-label="Retry sending email"
                           className="h-8 w-8 p-0 border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-950/30"
                         >
                           <RotateCw className="h-4 w-4" />
@@ -762,6 +764,7 @@ export function ApplicationList({
                           size="sm"
                           variant="outline"
                           title="Reset status to pending (for testing)"
+                          aria-label="Reset status to pending (for testing)"
                           className="h-8 w-8 p-0 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
                         >
                           <RotateCw className="h-4 w-4" />
@@ -772,7 +775,8 @@ export function ApplicationList({
                         size="sm"
                         variant="outline"
                         title="View application"
-                        className="h-8 w-8 p-0 border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-950/30"
+                        aria-label="View application"
+                        className="h-8 w-8 p-0 text-muted-foreground hover:bg-accent"
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
@@ -781,6 +785,7 @@ export function ApplicationList({
                         size="sm"
                         variant="outline"
                         title="Edit application"
+                        aria-label="Edit application"
                         className="h-8 w-8 p-0 border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
                       >
                         <Pencil className="h-4 w-4" />
@@ -803,6 +808,7 @@ export function ApplicationList({
                         size="sm"
                         variant="ghost"
                         title="Remove application"
+                        aria-label="Remove application"
                         className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -843,7 +849,7 @@ export function ApplicationList({
               key={application.id} 
               className={cn(
                 "border overflow-hidden",
-                application.status === "sent" && "bg-purple-50/30 dark:bg-purple-950/10 border-l-4 border-l-purple-400"
+                application.status === "sent" && "bg-purple-50/30 dark:bg-purple-950/10 border-purple-200 dark:border-purple-900"
               )}
             >
               <CardContent className="p-3 sm:p-4 space-y-3">
@@ -856,7 +862,7 @@ export function ApplicationList({
                     className="mt-1 flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm sm:text-base truncate">{application.name}</h3>
+                    <h3 className="font-medium text-sm sm:text-base break-words">{application.name}</h3>
                     <p className="text-xs sm:text-sm text-muted-foreground mt-1 break-words">{application.university}</p>
                     <p className="text-xs text-muted-foreground mt-1 break-all">{application.email}</p>
                   </div>
@@ -906,7 +912,7 @@ export function ApplicationList({
                     <Button
                       onClick={() => onSendEmail(application)}
                       size="sm"
-                      className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                      className="bg-green-600 hover:bg-green-700 text-white h-10 text-xs"
                     >
                       <Send className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
                       Send
@@ -916,7 +922,7 @@ export function ApplicationList({
                     <Button
                       onClick={() => onSendEmail(application)}
                       size="sm"
-                      className="bg-orange-600 hover:bg-orange-700 text-white text-xs"
+                      className="bg-orange-600 hover:bg-orange-700 text-white h-10 text-xs"
                     >
                       <RotateCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
                       Retry
@@ -926,7 +932,7 @@ export function ApplicationList({
                     <Button
                       onClick={() => onResetStatus(application.id)}
                       size="sm"
-                      className="bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                      className="bg-amber-600 hover:bg-amber-700 text-white h-10 text-xs"
                     >
                       <RotateCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
                       Reset
@@ -936,7 +942,7 @@ export function ApplicationList({
                     onClick={() => router.push(`/applications/${application.id}`)}
                     size="sm"
                     variant="outline"
-                    className="border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-950/30 text-xs"
+                    className="text-muted-foreground hover:bg-accent h-10 text-xs"
                   >
                     <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
                     View
@@ -945,7 +951,7 @@ export function ApplicationList({
                     onClick={() => router.push(`/applications/${application.id}/edit`)}
                     size="sm"
                     variant="outline"
-                    className="border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/30 text-xs"
+                    className="border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/30 h-10 text-xs"
                   >
                     <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
                     Edit
@@ -967,7 +973,7 @@ export function ApplicationList({
                     }}
                     size="sm"
                     variant="destructive"
-                    className="bg-red-600 hover:bg-red-700 text-white text-xs"
+                    className="bg-red-600 hover:bg-red-700 text-white h-10 text-xs"
                   >
                     <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
                     Delete

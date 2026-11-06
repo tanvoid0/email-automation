@@ -7,6 +7,7 @@ import { useToast } from "@/lib/hooks/useToast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Pencil, Trash2, Loader2, ExternalLink, FileDown, LayoutList, FileText } from "lucide-react";
+import { PageHeader } from "@/app/components/PageHeader";
 import { downloadSOPAsPDF } from "@/lib/utils/sop-pdf";
 import { smartSplitToSections } from "@/lib/utils/sop";
 
@@ -126,34 +127,30 @@ export default function ViewSOPPage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-        <div className="max-w-3xl mx-auto flex items-center justify-center h-[60vh]">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading SOP...</p>
-          </div>
+      <div className="flex min-h-[50dvh] items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading SOP...</p>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (!sop) {
     return (
-      <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-        <div className="max-w-3xl mx-auto">
-          <Card>
-            <CardContent className="py-8 text-center">
-              <p className="text-muted-foreground mb-4">SOP not found.</p>
-              <Link href="/sop">
-                <Button variant="outline">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to SOPs
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="mx-auto max-w-4xl p-4 md:p-8">
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-muted-foreground mb-4">SOP not found.</p>
+            <Link href="/sop">
+              <Button variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to SOPs
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -205,31 +202,22 @@ export default function ViewSOPPage() {
   const sectionLabels = new Map(sortedTemplateSections.map((s) => [s.key, s.label]));
 
   return (
-    <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link href="/sop">
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">{sop.title}</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {linkedHref ? (
-                  <Link href={linkedHref} className="text-primary hover:underline inline-flex items-center gap-1">
-                    {linkedLabel}
-                    <ExternalLink className="h-3 w-3" />
-                  </Link>
-                ) : (
-                  linkedLabel
-                )}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
+      <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title={<span className="break-words">{sop.title}</span>}
+          description={
+            linkedHref ? (
+              <Link href={linkedHref} className="text-primary hover:underline inline-flex items-center gap-1">
+                {linkedLabel}
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            ) : (
+              linkedLabel
+            )
+          }
+          backHref="/sop"
+          actions={
+            <>
             <Button
               variant="outline"
               size="sm"
@@ -265,8 +253,9 @@ export default function ViewSOPPage() {
                 </>
               )}
             </Button>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         <Card>
           <CardHeader>
@@ -278,7 +267,7 @@ export default function ViewSOPPage() {
                 </CardDescription>
               </div>
               {hasSectionView && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
                     variant={contentViewMode === "sections" ? "default" : "outline"}
@@ -314,11 +303,10 @@ export default function ViewSOPPage() {
                 ))}
               </div>
             ) : (
-              <div className="whitespace-pre-wrap text-sm">{displayMerged || sop.content}</div>
+              <div className="whitespace-pre-wrap break-words text-sm">{displayMerged || sop.content}</div>
             )}
           </CardContent>
         </Card>
       </div>
-    </main>
   );
 }

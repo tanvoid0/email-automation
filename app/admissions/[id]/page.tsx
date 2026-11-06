@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/lib/hooks/useToast";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/app/components/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -28,7 +29,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft,
   Bot,
   Copy,
   ExternalLink,
@@ -430,24 +430,37 @@ export default function AdmissionDetailPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-background p-8 flex justify-center items-center gap-2">
+      <div className="flex min-h-[50dvh] items-center justify-center gap-2 p-8">
         <Loader2 className="h-8 w-8 animate-spin" />
         <span className="text-muted-foreground">Loading…</span>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background p-4 md:p-6 pb-24">
-      <div className="max-w-3xl mx-auto space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div>
-            <Link href="/admissions" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-2">
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              All applications
-            </Link>
-            <h1 className="text-2xl font-bold">{universityName || "Application"}</h1>
-            {programName && <p className="text-muted-foreground">{programName}</p>}
+    <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-8">
+        <PageHeader
+          title={<span className="break-words">{universityName || "Application"}</span>}
+          description={programName || undefined}
+          backHref="/admissions"
+          backLabel="All applications"
+          actions={
+            <>
+              <Button onClick={save} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                Save
+              </Button>
+              <Button variant="outline" onClick={() => openEmailComposer("admissions")}>
+                <Mail className="h-4 w-4 mr-1" />
+                Email
+              </Button>
+              <Button variant="destructive" size="icon" onClick={handleDelete} aria-label="Delete">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          }
+        />
+        <div>
             <div className="flex flex-wrap gap-2 mt-2">
               <Badge variant="outline">{admissionStageLabel(stage as (typeof ADMISSION_STAGES)[number])}</Badge>
               <Badge variant="secondary">{priority} priority</Badge>
@@ -479,20 +492,6 @@ export default function AdmissionDetailPage() {
               </p>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => openEmailComposer("admissions")}>
-              <Mail className="h-4 w-4 mr-1" />
-              Email
-            </Button>
-            <Button onClick={save} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-              Save
-            </Button>
-            <Button variant="destructive" size="icon" onClick={handleDelete} aria-label="Delete">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
 
         <div className="flex items-center gap-3">
           <Progress value={pct} className="h-2 flex-1" />
@@ -906,6 +905,7 @@ export default function AdmissionDetailPage() {
                   variant="ghost"
                   className="md:col-span-1"
                   onClick={() => setDeadlines((x) => x.filter((_, i) => i !== idx))}
+                  aria-label="Remove deadline"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -967,7 +967,7 @@ export default function AdmissionDetailPage() {
                     }}
                   />
                 </div>
-                <Button type="button" size="icon" variant="ghost" onClick={() => setContacts((x) => x.filter((_, i) => i !== idx))}>
+                <Button type="button" size="icon" variant="ghost" onClick={() => setContacts((x) => x.filter((_, i) => i !== idx))} aria-label="Remove contact">
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
@@ -1026,7 +1026,7 @@ export default function AdmissionDetailPage() {
             <ul className="text-xs space-y-1">
               {attachmentIds.map((aid) => (
                 <li key={aid} className="flex items-center justify-between gap-2 border rounded px-2 py-0.5">
-                  <span>{attachmentMeta.get(aid)?.filename ?? aid}</span>
+                  <span className="min-w-0 break-all">{attachmentMeta.get(aid)?.filename ?? aid}</span>
                   <Button type="button" size="sm" variant="ghost" onClick={() => setAttachmentIds((x) => x.filter((i) => i !== aid))}>
                     Remove
                   </Button>
@@ -1035,7 +1035,6 @@ export default function AdmissionDetailPage() {
             </ul>
           </CardContent>
         </Card>
-      </div>
 
       <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -1103,6 +1102,6 @@ export default function AdmissionDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </main>
+    </div>
   );
 }

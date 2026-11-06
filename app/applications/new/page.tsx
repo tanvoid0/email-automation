@@ -2,10 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useToast } from "@/lib/hooks/useToast";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { EmailForm } from "@/app/components/EmailForm";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader } from "@/app/components/PageHeader";
 import type { UserProfileData } from "@/lib/types/userProfile";
 
 export default function NewApplicationPage() {
@@ -99,8 +97,7 @@ export default function NewApplicationPage() {
         duration: 3000,
         persist: false,
       });
-      // Redirect to home page after successful addition
-      router.push("/");
+      router.push("/applications");
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       
@@ -125,29 +122,17 @@ export default function NewApplicationPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-          <Link href="/applications" className="w-full sm:w-auto">
-            <Button variant="outline" size="sm" className="w-full sm:w-auto">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </Link>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold">Add Application</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">
-              Create a new application and customize the email template
-            </p>
-          </div>
-        </div>
+    <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+      <PageHeader
+        title="Add Application"
+        description="Create a new application and customize the email template"
+        backHref="/applications"
+      />
 
-        <EmailForm
-          onAddApplication={handleAddApplication}
-          onCustomizeEmail={handleCustomizeEmail}
-        />
-      </div>
-    </main>
+      <EmailForm
+        onAddApplication={handleAddApplication}
+        onCustomizeEmail={handleCustomizeEmail}
+      />
+    </div>
   );
 }
-

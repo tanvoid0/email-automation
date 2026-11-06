@@ -492,7 +492,7 @@ export function EmailForm({
               type="button"
               onClick={fillMockData}
               variant="outline"
-              className="text-xs border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300"
+              className="text-xs text-muted-foreground hover:bg-accent"
             >
               Fill Mock Data
             </Button>

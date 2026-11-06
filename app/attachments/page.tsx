@@ -26,7 +26,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { 
-  ArrowLeft, 
   File, 
   ExternalLink, 
   Trash2, 
@@ -38,6 +37,7 @@ import {
   Upload,
   Clock
 } from "lucide-react";
+import { PageHeader } from "@/app/components/PageHeader";
 import { formatFileSize, fileToAttachment } from "@/lib/utils/attachments";
 
 interface AttachmentWithReferences {
@@ -193,101 +193,80 @@ export default function AttachmentsPage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center h-[60vh]">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-              <p className="text-muted-foreground">Loading attachments...</p>
-            </div>
-          </div>
+      <div className="flex min-h-[50dvh] items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading attachments...</p>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.back()}
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">Attachments</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Manage all file attachments and their references
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleOpenAddDialog}
-              className="bg-primary hover:bg-primary/90"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Attachment
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleCleanup}
-              disabled={isCleaningUp || danglingCount === 0}
-            >
-              {isCleaningUp ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Cleaning...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Cleanup Dangling ({danglingCount})
-                </>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={loadAttachments}
-              disabled={isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
-        </div>
+    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title="Attachments"
+          description="Manage all file attachments and their references"
+          actions={
+            <>
+              <Button onClick={handleOpenAddDialog}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Attachment
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleCleanup}
+                disabled={isCleaningUp || danglingCount === 0}
+              >
+                {isCleaningUp ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Cleaning...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Cleanup Dangling ({danglingCount})
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={loadAttachments}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </>
+          }
+        />
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-3">
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Total Attachments</CardTitle>
+            <CardHeader className="p-3 pb-1 sm:p-6 sm:pb-3">
+              <CardTitle className="text-xs font-medium sm:text-sm">Total Attachments</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
               <div className="text-2xl font-bold">{attachments.length}</div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Linked Attachments</CardTitle>
+            <CardHeader className="p-3 pb-1 sm:p-6 sm:pb-3">
+              <CardTitle className="text-xs font-medium sm:text-sm">Linked Attachments</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
               <div className="text-2xl font-bold text-green-600">
                 {attachments.filter(att => att.referenceCount > 0).length}
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Dangling Attachments</CardTitle>
+            <CardHeader className="p-3 pb-1 sm:p-6 sm:pb-3">
+              <CardTitle className="text-xs font-medium sm:text-sm">Dangling Attachments</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
               <div className="text-2xl font-bold text-red-600">{danglingCount}</div>
             </CardContent>
           </Card>
@@ -308,7 +287,66 @@ export default function AttachmentsPage() {
                 <p>No attachments found</p>
               </div>
             ) : (
-              <div className="rounded-md border">
+              <>
+              <ul className="space-y-3 md:hidden">
+                {attachments.map((attachment) => (
+                  <li key={attachment._id} className="space-y-3 rounded-md border p-3">
+                    <div className="flex items-start gap-2">
+                      <File className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 break-all text-sm font-medium">{attachment.filename}</span>
+                      {attachment.referenceCount === 0 ? (
+                        <Badge variant="destructive" className="shrink-0 gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          Dangling
+                        </Badge>
+                      ) : (
+                        <Badge variant="default" className="shrink-0 gap-1 bg-green-600">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Linked
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {[
+                        attachment.contentType || "Unknown",
+                        attachment.size ? formatFileSize(attachment.size) : null,
+                        attachment.createdAt ? new Date(attachment.createdAt).toLocaleDateString() : null,
+                      ].filter(Boolean).join(" • ")}
+                    </p>
+                    {(attachment.isInTemplate || attachment.linkedApplications.length > 0) && (
+                      <div className="flex flex-wrap gap-1">
+                        {attachment.isInTemplate && <Badge variant="secondary">Template</Badge>}
+                        {attachment.linkedApplications.map((app) => (
+                          <Link key={app.id} href={`/applications/${app.id}`} className="inline-flex">
+                            <Badge variant="outline" className="text-xs">
+                              {app.name}
+                              <ExternalLink className="h-3 w-3 ml-1" />
+                            </Badge>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="h-10 flex-1"
+                        onClick={() => router.push(`/attachments/${attachment._id}`)}
+                      >
+                        View
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-10 w-10 p-0 text-destructive hover:text-destructive"
+                        aria-label={`Delete ${attachment.filename}`}
+                        onClick={() => handleDelete(attachment._id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden rounded-md border md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -430,6 +468,7 @@ export default function AttachmentsPage() {
                   </TableBody>
                 </Table>
               </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -534,8 +573,7 @@ export default function AttachmentsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
-    </main>
+    </div>
   );
 }
 

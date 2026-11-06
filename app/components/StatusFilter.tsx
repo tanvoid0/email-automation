@@ -39,7 +39,7 @@ export function StatusFilter({
             size="sm"
             onClick={onSelectAll}
             className={cn(
-              "h-8 text-xs transition-all",
+              "h-10 sm:h-8 text-xs transition-all",
               statusFilter.size === 5 
                 ? "bg-foreground text-background font-semibold hover:bg-foreground/90" 
                 : "text-muted-foreground"
@@ -55,7 +55,7 @@ export function StatusFilter({
               size="sm"
               onClick={() => onToggleStatus(status)}
               className={cn(
-                "h-8 text-xs capitalize transition-all font-semibold",
+                "h-10 sm:h-8 text-xs capitalize transition-all font-semibold",
                 statusFilter.has(status)
                   ? "bg-foreground text-background hover:bg-foreground/90"
                   : "text-muted-foreground bg-background hover:bg-muted"

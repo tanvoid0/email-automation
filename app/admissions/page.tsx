@@ -5,7 +5,9 @@ import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
   closestCorners,
   useDroppable,
   useSensor,
@@ -13,13 +15,14 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useToast } from "@/lib/hooks/useToast";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/app/components/PageHeader";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CalendarDays, GripVertical, LayoutGrid, List, Loader2, Plus, School } from "lucide-react";
+import { CalendarDays, GripVertical, LayoutGrid, List, Loader2, Plus, School } from "lucide-react";
 import type { AdmissionApiResponse } from "@/lib/types/admission";
 import type { AdmissionStage } from "@/lib/types/admission";
 import { ADMISSION_STAGES } from "@/lib/types/admission";
@@ -111,7 +114,7 @@ function KanbanCardChrome({
   return (
     <div
       className={cn(
-        "rounded-lg border p-3 shadow-sm touch-none transition-colors",
+        "rounded-lg border p-3 shadow-sm transition-colors",
         shell,
         isDragging && !isOverlay && "opacity-40",
         isOverlay && "shadow-lg ring-2 ring-primary cursor-grabbing"
@@ -160,7 +163,7 @@ function KanbanSortableCard({ admission, now }: { admission: AdmissionApiRespons
         dragHandle={
           <button
             type="button"
-            className="mt-0.5 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing shrink-0"
+            className="-m-2 p-2 touch-none text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing shrink-0"
             {...listeners}
             {...attributes}
             aria-label="Drag to reorder or move column"
@@ -201,7 +204,7 @@ function KanbanSortableNestedRow({ admission, now }: { admission: AdmissionApiRe
       <div className="flex items-start gap-1.5 py-2 pr-2">
         <button
           type="button"
-          className="mt-0.5 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing shrink-0"
+          className="-m-2 p-2 touch-none text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing shrink-0"
           {...listeners}
           {...attributes}
           aria-label="Drag to reorder or move column"
@@ -319,7 +322,7 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col rounded-xl border bg-muted/30 min-h-[320px] w-[280px] shrink-0 p-2 gap-2 transition-colors",
+        "flex flex-col rounded-xl border bg-muted/30 min-h-[320px] w-[85vw] max-w-[20rem] md:w-[280px] shrink-0 snap-start p-2 gap-2 transition-colors",
         isOver && "bg-primary/10 border-primary/40"
       )}
     >
@@ -349,9 +352,9 @@ export default function AdmissionsBoardPage() {
   const now = useMemo(() => new Date(), [nowTick]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    })
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const load = useCallback(async () => {
@@ -414,64 +417,58 @@ export default function AdmissionsBoardPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center gap-2 p-8">
+      <div className="flex min-h-[50dvh] items-center justify-center gap-2 p-8">
         <Loader2 className="h-8 w-8 animate-spin" />
         <span className="text-muted-foreground">Loading board…</span>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background p-4 md:p-6">
-      <div className="max-w-[100vw] overflow-x-auto">
-        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 mb-6 min-w-max lg:min-w-0">
-          <div>
-            <Link
-              href="/"
-              className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-2"
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Home
-            </Link>
-            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
-              <LayoutGrid className="h-7 w-7 md:h-8 md:w-8" />
-              Your applications
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              Multiple programs at the same university group into one card with indented rows. Each card shows the next
-              application deadline as a relative date (updates every minute). Borders and backgrounds reflect deadline
-              urgency, pipeline stage, and decision. Drag to reorder or change stage; order is saved per stage.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 shrink-0">
-            <Link href="/admissions/settings">
-              <Button variant="outline">
-                <School className="h-4 w-4 mr-2" />
-                Settings
-              </Button>
-            </Link>
-            <Button variant="outline" asChild>
-              <Link href="/admissions/list">
-                <List className="h-4 w-4 mr-2" />
-                List view
-              </Link>
-            </Button>
+    <div className="mx-auto max-w-[100rem] space-y-6 p-4 md:p-8">
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <LayoutGrid className="h-7 w-7 shrink-0 md:h-8 md:w-8" aria-hidden />
+            Your applications
+          </span>
+        }
+        actions={
+          <>
             <Button asChild>
               <Link href="/admissions/new">
                 <Plus className="h-4 w-4 mr-2" />
                 New application
               </Link>
             </Button>
-          </div>
-        </div>
-
+            <Button variant="outline" asChild>
+              <Link href="/admissions/list">
+                <List className="h-4 w-4 mr-2" />
+                List view
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/admissions/settings">
+                <School className="h-4 w-4 mr-2" />
+                Settings
+              </Link>
+            </Button>
+          </>
+        }
+      />
+      <p className="max-w-prose text-xs text-muted-foreground md:text-sm">
+        Multiple programs at the same university group into one card with indented rows. Each card shows the next
+        application deadline as a relative date (updates every minute). Borders and backgrounds reflect deadline
+        urgency, pipeline stage, and decision. Drag to reorder or change stage; order is saved per stage.
+      </p>
+      <div>
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
         >
-          <div className="flex gap-3 pb-8 min-w-max">
+          <div className={`-mx-4 flex ${activeId ? "snap-none" : "snap-x snap-mandatory"} gap-3 overflow-x-auto scroll-px-4 px-4 pb-8 md:-mx-8 md:px-8 md:scroll-px-8 md:snap-none`}>
             {ADMISSION_STAGES.map((stage) => {
               const col = byStage(stage);
               const groups = groupAdmissionsByUniversity(col);
@@ -516,6 +513,6 @@ export default function AdmissionsBoardPage() {
           </DragOverlay>
         </DndContext>
       </div>
-    </main>
+    </div>
   );
 }

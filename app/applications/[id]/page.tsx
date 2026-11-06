@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { toast } from "sonner";
 import Link from "next/link";
+import { PageHeader } from "@/app/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Pencil, Mail, User, Building2, Send, CheckCircle2, XCircle, Clock, Paperclip, Loader2, RotateCw, RefreshCw, Trash2, Copy, Check, Ban } from "lucide-react";
@@ -208,7 +209,7 @@ export default function ViewApplicationPage() {
         }
       } catch (error: any) {
         toast.error(`Error loading application: ${error.message}`);
-        router.push("/");
+        router.push("/applications");
       } finally {
         setIsLoading(false);
       }
@@ -228,7 +229,7 @@ export default function ViewApplicationPage() {
       case "sending":
         return <Clock className="h-4 w-4 text-blue-500 animate-spin" />;
       case "cancelled":
-        return <Ban className="h-4 w-4 text-gray-500" />;
+        return <Ban className="h-4 w-4 text-muted-foreground" />;
       default:
         return null;
     }
@@ -582,8 +583,7 @@ export default function ViewApplicationPage() {
         persist: true,
       });
 
-      // Redirect to home page after successful deletion
-      router.push("/");
+      router.push("/applications");
     } catch (error: any) {
       console.error("Error deleting application:", error);
       toast.error(`Error deleting application: ${error.message}`, {
@@ -597,59 +597,44 @@ export default function ViewApplicationPage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-4xl mx-auto flex flex-col items-center justify-center h-64 gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground font-medium">Loading application...</p>
-        </div>
-      </main>
+      <div className="flex min-h-[50dvh] flex-col items-center justify-center gap-4 p-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground font-medium">Loading application...</p>
+      </div>
     );
   }
 
   if (!application) {
     return (
-      <main className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
-          <Card>
-            <CardContent className="py-8 text-center">
-              <p className="text-muted-foreground mb-4">Application not found</p>
+      <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-muted-foreground mb-4">Application not found</p>
+            <Button asChild variant="outline">
               <Link href="/applications">
-                <Button variant="outline">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Home
-                </Button>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Applications
               </Link>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 flex-1 min-w-0">
-            <Link href="/applications" className="w-full sm:w-auto">
-              <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-            </Link>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold">Application Details</h1>
-              <p className="text-sm sm:text-base text-muted-foreground">
-                Review application information and email template
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+    <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+      <PageHeader
+        title="Application Details"
+        description="Review application information and email template"
+        backHref="/applications"
+        actions={
+          <>
             {application.status === "pending" && (
               <Button
                 onClick={handleSendEmail}
                 disabled={isSending}
-                className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white"
+                className="bg-green-600 hover:bg-green-700 text-white"
               >
                 {isSending ? (
                   <>
@@ -668,7 +653,7 @@ export default function ViewApplicationPage() {
               <Button
                 onClick={handleSendEmail}
                 disabled={isSending}
-                className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white"
+                className="bg-orange-600 hover:bg-orange-700 text-white"
               >
                 {isSending ? (
                   <>
@@ -683,12 +668,12 @@ export default function ViewApplicationPage() {
                 )}
               </Button>
             )}
-            <Link href={`/applications/${id}/edit`} className="w-full sm:w-auto">
-              <Button className="w-full sm:w-auto bg-primary hover:bg-primary/90">
+            <Button asChild variant="outline">
+              <Link href={`/applications/${id}/edit`}>
                 <Pencil className="h-4 w-4 mr-2" />
                 Edit
-              </Button>
-            </Link>
+              </Link>
+            </Button>
             <Button
               onClick={() => {
                 toast.error(`Delete ${application.name}?`, {
@@ -706,7 +691,7 @@ export default function ViewApplicationPage() {
               }}
               disabled={isDeleting}
               variant="destructive"
-              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
               {isDeleting ? (
                 <>
@@ -720,208 +705,208 @@ export default function ViewApplicationPage() {
                 </>
               )}
             </Button>
-          </div>
-        </div>
+          </>
+        }
+      />
 
-        {/* Application Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" />
-              Recipient Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Recipient Name</label>
-                <p className="text-base font-medium mt-1">{application.name}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">University</label>
-                <p className="text-base font-medium mt-1 flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                  {application.university}
-                </p>
-              </div>
+      {/* Application Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5 text-primary" />
+            Recipient Information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Recipient Name</label>
+              <p className="text-base font-medium mt-1 break-words">{application.name}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Email Address</label>
-              <p className="text-base font-medium mt-1 flex items-center gap-2">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                {application.email}
+              <label className="text-sm font-medium text-muted-foreground">University</label>
+              <p className="text-base font-medium mt-1 flex items-center gap-2 break-words">
+                <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                {application.university}
               </p>
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Status</label>
-              <div className="flex items-center gap-2 mt-1">
-                {getStatusIcon(application.status)}
-                {getStatusBadge(application.status)}
-              </div>
-              {application.error && (
-                <div className="mt-2 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-sm text-red-700 dark:text-red-400 font-medium">Error Summary:</p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50"
-                        onClick={async () => {
-                          const errorText = application.errorDetails 
-                            ? JSON.stringify({
-                                summary: application.error || "Unknown error",
-                                details: application.errorDetails
-                              }, null, 2)
-                            : application.error || "Unknown error";
-                          
-                          try {
-                            await navigator.clipboard.writeText(errorText);
-                            setCopied(true);
-                            toast.success("Error details copied to clipboard");
-                            setTimeout(() => setCopied(false), 2000);
-                          } catch (err) {
-                            toast.error("Failed to copy to clipboard");
-                          }
-                        }}
-                        title="Copy error details"
-                      >
-                        {copied ? (
-                          <Check className="h-4 w-4" />
-                        ) : (
-                          <Copy className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                    <p className="text-sm text-red-600 dark:text-red-300">{application.error}</p>
-                  </div>
-                  
-                  {application.errorDetails && (
-                    <div className="mt-3 pt-3 border-t border-red-300 dark:border-red-700 space-y-3">
-                      <div>
-                        <p className="text-xs font-semibold text-red-800 dark:text-red-300 mb-2">Detailed Error Information:</p>
-                        <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded text-xs font-mono space-y-1">
-                          <div><span className="font-semibold">Message:</span> {application.errorDetails.message}</div>
-                          {application.errorDetails.timestamp && (
-                            <div><span className="font-semibold">Timestamp:</span> {new Date(application.errorDetails.timestamp).toLocaleString()}</div>
-                          )}
-                          {application.errorDetails.httpStatus && (
-                            <div><span className="font-semibold">HTTP Status:</span> {application.errorDetails.httpStatus} {application.errorDetails.httpStatusText || ''}</div>
-                          )}
-                        </div>
-                      </div>
-
-                      {application.errorDetails.payloadSize && (
-                        <div>
-                          <p className="text-xs font-semibold text-red-800 dark:text-red-300 mb-2">Payload Size Information:</p>
-                          <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded text-xs space-y-2">
-                            <div className="grid grid-cols-2 gap-2">
-                              <div><span className="font-semibold">Email Body:</span> {application.errorDetails.payloadSize.emailBodySizeKB} KB</div>
-                              <div><span className="font-semibold">Total Attachments:</span> {application.errorDetails.payloadSize.attachmentsCount}</div>
-                              <div><span className="font-semibold">Attachment Size:</span> {application.errorDetails.payloadSize.totalAttachmentSizeMB} MB</div>
-                              <div><span className="font-semibold">Total Payload:</span> {application.errorDetails.payloadSize.totalPayloadSizeMB} MB</div>
-                            </div>
-                            
-                            {application.errorDetails.payloadSize.attachmentDetails && application.errorDetails.payloadSize.attachmentDetails.length > 0 && (
-                              <div className="mt-2 pt-2 border-t border-red-300 dark:border-red-700">
-                                <p className="font-semibold mb-1">Individual Attachments:</p>
-                                <ul className="space-y-1">
-                                  {application.errorDetails.payloadSize.attachmentDetails.map((att, idx) => (
-                                    <li key={idx} className="flex items-center justify-between">
-                                      <span className="truncate flex-1">{att.filename}</span>
-                                      <span className="ml-2 font-semibold">{att.sizeMB} MB</span>
-                                      {att.contentType && (
-                                        <span className="ml-2 text-red-600 dark:text-red-400">({att.contentType})</span>
-                                      )}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {application.errorDetails.subject && (
-                        <div>
-                          <p className="text-xs font-semibold text-red-800 dark:text-red-300 mb-1">Email Subject:</p>
-                          <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded text-xs">{application.errorDetails.subject}</div>
-                        </div>
-                      )}
-
-                      {application.errorDetails.emailBodyPreview && (
-                        <div>
-                          <p className="text-xs font-semibold text-red-800 dark:text-red-300 mb-1">Email Body Preview:</p>
-                          <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded text-xs font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">
-                            {application.errorDetails.emailBodyPreview}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Email Address</label>
+            <p className="text-base font-medium mt-1 flex items-center gap-2 break-all">
+              <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {application.email}
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">Status</label>
+            <div className="flex items-center gap-2 mt-1">
+              {getStatusIcon(application.status)}
+              {getStatusBadge(application.status)}
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Attachments */}
-        {attachments.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Paperclip className="h-5 w-5 text-primary" />
-                Attachments ({attachments.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                {attachments.map((att, idx) => (
-                  <li key={idx} className="flex items-center gap-2 text-sm">
-                    <AttachmentPreview
-                      id={att._id || att.id}
-                      filename={att.filename}
-                      content={att.content}
-                      contentType={att.contentType}
+            {application.error && (
+              <div className="mt-2 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-md space-y-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm text-red-700 dark:text-red-400 font-medium">Error Summary:</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 w-9 p-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50"
+                      onClick={async () => {
+                        const errorText = application.errorDetails 
+                          ? JSON.stringify({
+                              summary: application.error || "Unknown error",
+                              details: application.errorDetails
+                            }, null, 2)
+                          : application.error || "Unknown error";
+                        
+                        try {
+                          await navigator.clipboard.writeText(errorText);
+                          setCopied(true);
+                          toast.success("Error details copied to clipboard");
+                          setTimeout(() => setCopied(false), 2000);
+                        } catch (err) {
+                          toast.error("Failed to copy to clipboard");
+                        }
+                      }}
+                      title="Copy error details"
+                    aria-label="Copy error details"
                     >
-                      <div className="flex items-center gap-2 hover:text-foreground transition-colors cursor-pointer">
-                        <Paperclip className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">{att.filename}</span>
-                        {att.contentType && (
-                          <Badge variant="outline" className="text-xs">
-                            {att.contentType}
-                          </Badge>
+                      {copied ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-sm text-red-600 dark:text-red-300">{application.error}</p>
+                </div>
+                
+                {application.errorDetails && (
+                  <div className="mt-3 pt-3 border-t border-red-300 dark:border-red-700 space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold text-red-800 dark:text-red-300 mb-2">Detailed Error Information:</p>
+                      <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded text-xs font-mono space-y-1">
+                        <div><span className="font-semibold">Message:</span> {application.errorDetails.message}</div>
+                        {application.errorDetails.timestamp && (
+                          <div><span className="font-semibold">Timestamp:</span> {new Date(application.errorDetails.timestamp).toLocaleString()}</div>
+                        )}
+                        {application.errorDetails.httpStatus && (
+                          <div><span className="font-semibold">HTTP Status:</span> {application.errorDetails.httpStatus} {application.errorDetails.httpStatusText || ''}</div>
                         )}
                       </div>
-                    </AttachmentPreview>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        )}
+                    </div>
 
-        {/* Email Template */}
+                    {application.errorDetails.payloadSize && (
+                      <div>
+                        <p className="text-xs font-semibold text-red-800 dark:text-red-300 mb-2">Payload Size Information:</p>
+                        <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded text-xs space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div><span className="font-semibold">Email Body:</span> {application.errorDetails.payloadSize.emailBodySizeKB} KB</div>
+                            <div><span className="font-semibold">Total Attachments:</span> {application.errorDetails.payloadSize.attachmentsCount}</div>
+                            <div><span className="font-semibold">Attachment Size:</span> {application.errorDetails.payloadSize.totalAttachmentSizeMB} MB</div>
+                            <div><span className="font-semibold">Total Payload:</span> {application.errorDetails.payloadSize.totalPayloadSizeMB} MB</div>
+                          </div>
+                          
+                          {application.errorDetails.payloadSize.attachmentDetails && application.errorDetails.payloadSize.attachmentDetails.length > 0 && (
+                            <div className="mt-2 pt-2 border-t border-red-300 dark:border-red-700">
+                              <p className="font-semibold mb-1">Individual Attachments:</p>
+                              <ul className="space-y-1">
+                                {application.errorDetails.payloadSize.attachmentDetails.map((att, idx) => (
+                                  <li key={idx} className="flex items-center justify-between">
+                                    <span className="truncate flex-1">{att.filename}</span>
+                                    <span className="ml-2 font-semibold">{att.sizeMB} MB</span>
+                                    {att.contentType && (
+                                      <span className="ml-2 text-red-600 dark:text-red-400">({att.contentType})</span>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {application.errorDetails.subject && (
+                      <div>
+                        <p className="text-xs font-semibold text-red-800 dark:text-red-300 mb-1">Email Subject:</p>
+                        <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded text-xs">{application.errorDetails.subject}</div>
+                      </div>
+                    )}
+
+                    {application.errorDetails.emailBodyPreview && (
+                      <div>
+                        <p className="text-xs font-semibold text-red-800 dark:text-red-300 mb-1">Email Body Preview:</p>
+                        <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded text-xs font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">
+                          {application.errorDetails.emailBodyPreview}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Attachments */}
+      {attachments.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Mail className="h-5 w-5 text-primary" />
-              Email Template
+              <Paperclip className="h-5 w-5 text-primary" />
+              Attachments ({attachments.length})
             </CardTitle>
-            <CardDescription>
-              The email content that will be sent to the recipient
-            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="bg-muted/50 rounded-md p-4 border">
-              <pre className="whitespace-pre-wrap text-sm font-mono text-foreground">
-                {application.emailText}
-              </pre>
-            </div>
+            <ul className="space-y-2">
+              {attachments.map((att, idx) => (
+                <li key={idx} className="flex items-center gap-2 text-sm">
+                  <AttachmentPreview
+                    id={att._id || att.id}
+                    filename={att.filename}
+                    content={att.content}
+                    contentType={att.contentType}
+                  >
+                    <div className="flex items-center gap-2 hover:text-foreground transition-colors cursor-pointer">
+                      <Paperclip className="h-4 w-4 text-muted-foreground" />
+                      <span className="min-w-0 break-all text-muted-foreground">{att.filename}</span>
+                      {att.contentType && (
+                        <Badge variant="outline" className="text-xs">
+                          {att.contentType}
+                        </Badge>
+                      )}
+                    </div>
+                  </AttachmentPreview>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
-      </div>
-    </main>
+      )}
+
+      {/* Email Template */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-primary" />
+            Email Template
+          </CardTitle>
+          <CardDescription>
+            The email content that will be sent to the recipient
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-muted/50 rounded-md p-4 border">
+            <pre className="whitespace-pre-wrap break-words text-sm font-mono text-foreground">
+              {application.emailText}
+            </pre>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
-

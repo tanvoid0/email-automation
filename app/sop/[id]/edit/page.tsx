@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Save, LayoutList, FileText } from "lucide-react";
+import { PageHeader } from "@/app/components/PageHeader";
+import { Loader2, Save, LayoutList, FileText } from "lucide-react";
 import type { SOPSectionEntry } from "@/lib/types/sop";
 import type { TemplateSection } from "@/lib/types/sopTemplate";
 import {
@@ -252,34 +253,22 @@ export default function EditSOPPage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-        <div className="max-w-3xl mx-auto flex items-center justify-center h-[60vh]">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading SOP...</p>
-          </div>
+      <div className="flex min-h-[50dvh] items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading SOP...</p>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Link href={`/sop/${id}`}>
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Edit Statement of Purpose</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Update the SOP details and optional link.
-            </p>
-          </div>
-        </div>
+      <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title="Edit Statement of Purpose"
+          description="Update the SOP details and optional link."
+          backHref={`/sop/${id}`}
+        />
 
         <form onSubmit={onSubmit}>
           <Card className="mb-6">
@@ -365,7 +354,7 @@ export default function EditSOPPage() {
                       Toggle between section view (easier to maintain) and single merged view. Section data is kept when switching to merged; switching back to section re-splits the merged text by paragraphs.
                     </CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
                       variant={contentViewMode === "sections" ? "default" : "outline"}
@@ -448,7 +437,7 @@ export default function EditSOPPage() {
             </Card>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
               {isSubmitting ? (
                 <>
@@ -470,6 +459,5 @@ export default function EditSOPPage() {
           </div>
         </form>
       </div>
-    </main>
   );
 }

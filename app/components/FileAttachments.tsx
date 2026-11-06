@@ -107,7 +107,7 @@ export function FileAttachments({
             {attachments.map((attachment, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between p-2 bg-background rounded border"
+                className="flex items-center justify-between gap-2 p-2 bg-background rounded border"
               >
                 <AttachmentPreview
                   filename={attachment.filename}
@@ -134,7 +134,8 @@ export function FileAttachments({
                     e.stopPropagation();
                     handleRemove(index);
                   }}
-                  className="flex-shrink-0"
+                  className="h-10 w-10 flex-shrink-0 p-0"
+                  aria-label={`Remove ${attachment.filename}`}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>

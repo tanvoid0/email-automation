@@ -7,8 +7,8 @@ import { useEmailQueue } from "@/lib/hooks/useEmailQueue";
 import { Button } from "@/components/ui/button";
 import { ApplicationList, type Application } from "../components/ApplicationList";
 import { EmailProgress } from "../components/EmailProgress";
-import { Plus, Settings, Loader2, Paperclip, FileText, LayoutDashboard, School } from "lucide-react";
-import { NotificationBell } from "../components/NotificationBell";
+import { Plus, Loader2 } from "lucide-react";
+import { PageHeader } from "../components/PageHeader";
 import { EmailPreparationService } from "@/lib/services/EmailPreparationService";
 import { ApplicationStatusService } from "@/lib/services/ApplicationStatusService";
 import { removeQueueItemsByApplicationId } from "@/lib/utils/email-queue";
@@ -507,68 +507,27 @@ export default function ApplicationsListPage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-7xl mx-auto flex flex-col items-center justify-center h-64 gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground font-medium">Loading outreach applications…</p>
-        </div>
-      </main>
+      <div className="flex min-h-[50dvh] flex-col items-center justify-center gap-4 p-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground font-medium">Loading outreach applications…</p>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
-            <div className="mb-6 md:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <Link
-                  href="/"
-                  className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-2"
-                >
-                  <LayoutDashboard className="h-4 w-4 mr-1" />
-                  Dashboard
-                </Link>
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1 md:mb-2">
-                  Email &amp; outreach
-                </h1>
-                <p className="text-sm sm:text-base text-muted-foreground">
-                  Professor outreach applications in {APP_NAME}—compose, attach files, and send from the queue.
-                </p>
-              </div>
-              <div className="flex gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
-                <NotificationBell />
-                <Link href="/applications/new" className="w-full sm:w-auto">
-                  <Button className="w-full sm:w-auto bg-primary hover:bg-primary/90">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Application
-                  </Button>
-                </Link>
-                <Link href="/attachments" className="w-full sm:w-auto">
-                  <Button variant="outline" className="w-full sm:w-auto">
-                    <Paperclip className="h-4 w-4 mr-2" />
-                    Attachments
-                  </Button>
-                </Link>
-                <Link href="/admissions" className="w-full sm:w-auto">
-                  <Button variant="outline" className="w-full sm:w-auto">
-                    <School className="h-4 w-4 mr-2" />
-                    Admissions
-                  </Button>
-                </Link>
-                <Link href="/sop" className="w-full sm:w-auto">
-                  <Button variant="outline" className="w-full sm:w-auto">
-                    <FileText className="h-4 w-4 mr-2" />
-                    SOPs
-                  </Button>
-                </Link>
-                <Link href="/settings" className="w-full sm:w-auto">
-                  <Button variant="outline" className="w-full sm:w-auto">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Settings
-                  </Button>
-                </Link>
-              </div>
-            </div>
+    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+      <PageHeader
+        title="Email & outreach"
+        description={`Professor outreach applications in ${APP_NAME}—compose, attach files, and send from the queue.`}
+        actions={
+          <Button asChild>
+            <Link href="/applications/new">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Application
+            </Link>
+          </Button>
+        }
+      />
 
         {/* Email Queue Progress */}
         {emailQueue.progress.total > 0 && (
@@ -591,7 +550,6 @@ export default function ApplicationsListPage() {
           onAttachmentsUpdated={loadApplications}
           isQueueProcessing={emailQueue.isProcessing}
         />
-      </div>
-    </main>
+    </div>
   );
 }

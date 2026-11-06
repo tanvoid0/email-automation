@@ -9,8 +9,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    // Skip check for login page
-    if (pathname === "/login") {
+    // Skip check for public auth pages
+    if (pathname === "/login" || pathname === "/signup") {
       setIsChecking(false);
       return;
     }
@@ -38,12 +38,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [pathname, router]);
 
   // Show loading state while checking
-  if (isChecking && pathname !== "/login") {
+  if (isChecking && pathname !== "/login" && pathname !== "/signup") {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-dvh flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-100"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Verifying authentication...</p>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
+          <p className="mt-4 text-muted-foreground">Verifying authentication...</p>
         </div>
       </div>
     );

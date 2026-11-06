@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/lib/hooks/useToast";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/app/components/PageHeader";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -16,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Save, Sparkles } from "lucide-react";
+import { Loader2, Save, Sparkles } from "lucide-react";
 import type { AdmissionChecklistItem, AdmissionDeadline } from "@/lib/types/admission";
 import { ADMISSION_STAGES } from "@/lib/types/admission";
 import { admissionStageLabel } from "@/lib/utils/admissions";
@@ -261,15 +262,8 @@ export default function NewAdmissionPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background p-4 md:p-6">
-      <div className="max-w-2xl mx-auto space-y-4">
-        <Link
-          href="/admissions"
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Back to applications
-        </Link>
+    <div className="mx-auto max-w-2xl space-y-4 p-4 md:p-8">
+      <PageHeader title="New application" backHref="/admissions" backLabel="Back to applications" />
 
         <Card className="border-primary/20">
           <CardHeader className="p-4 pb-2 space-y-1">
@@ -289,7 +283,7 @@ export default function NewAdmissionPage() {
                 Page URL *
               </Label>
               <Input
-                className="h-9"
+                className="h-10 md:h-9"
                 id="primaryUrl"
                 type="url"
                 value={primaryUrl}
@@ -302,7 +296,7 @@ export default function NewAdmissionPage() {
                 Subject / focus
               </Label>
               <Input
-                className="h-9"
+                className="h-10 md:h-9"
                 id="ctxSubject"
                 value={contextSubject}
                 onChange={(e) => setContextSubject(e.target.value)}
@@ -318,7 +312,7 @@ export default function NewAdmissionPage() {
                   Admission level (AI)
                 </Label>
                 <Input
-                  className="h-9"
+                  className="h-10 md:h-9"
                   id="lvl"
                   value={admissionLevelCtx}
                   onChange={(e) => setAdmissionLevelCtx(e.target.value)}
@@ -331,7 +325,7 @@ export default function NewAdmissionPage() {
                   Discipline (AI)
                 </Label>
                 <Input
-                  className="h-9"
+                  className="h-10 md:h-9"
                   id="subj"
                   value={admissionSubjectAreaCtx}
                   onChange={(e) => setAdmissionSubjectAreaCtx(e.target.value)}
@@ -377,7 +371,7 @@ export default function NewAdmissionPage() {
                   University *
                 </Label>
                 <Input
-                  className="h-9"
+                  className="h-10 md:h-9"
                   id="uni"
                   value={universityName}
                   onChange={(e) => setUniversityName(e.target.value)}
@@ -390,7 +384,7 @@ export default function NewAdmissionPage() {
                   Program
                 </Label>
                 <Input
-                  className="h-9"
+                  className="h-10 md:h-9"
                   id="prog"
                   value={programName}
                   onChange={(e) => setProgramName(e.target.value)}
@@ -403,7 +397,7 @@ export default function NewAdmissionPage() {
                     Degree
                   </Label>
                   <Input
-                    className="h-9"
+                    className="h-10 md:h-9"
                     id="deg"
                     value={degree}
                     onChange={(e) => setDegree(e.target.value)}
@@ -415,7 +409,7 @@ export default function NewAdmissionPage() {
                     Intake term
                   </Label>
                   <Input
-                    className="h-9"
+                    className="h-10 md:h-9"
                     id="term"
                     value={term}
                     onChange={(e) => setTerm(e.target.value)}
@@ -428,7 +422,7 @@ export default function NewAdmissionPage() {
                   Country
                 </Label>
                 <Input
-                  className="h-9"
+                  className="h-10 md:h-9"
                   id="country"
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
@@ -440,7 +434,7 @@ export default function NewAdmissionPage() {
                   Application URL
                 </Label>
                 <Input
-                  className="h-9"
+                  className="h-10 md:h-9"
                   id="appUrl"
                   type="url"
                   value={applicationUrl}
@@ -453,7 +447,7 @@ export default function NewAdmissionPage() {
                   Scholarship / aid URL
                 </Label>
                 <Input
-                  className="h-9"
+                  className="h-10 md:h-9"
                   id="schUrl"
                   type="url"
                   value={scholarshipUrl}
@@ -466,7 +460,7 @@ export default function NewAdmissionPage() {
                   Department page
                 </Label>
                 <Input
-                  className="h-9"
+                  className="h-10 md:h-9"
                   id="deptUrl"
                   type="url"
                   value={departmentUrl}
@@ -479,7 +473,7 @@ export default function NewAdmissionPage() {
                   Status portal
                 </Label>
                 <Input
-                  className="h-9"
+                  className="h-10 md:h-9"
                   id="portalUrl"
                   type="url"
                   value={statusPortalUrl}
@@ -498,7 +492,7 @@ export default function NewAdmissionPage() {
                       Label
                     </Label>
                     <Input
-                      className="h-9"
+                      className="h-10 md:h-9"
                       id="payLabel"
                       value={payLabel}
                       onChange={(e) => setPayLabel(e.target.value)}
@@ -510,7 +504,7 @@ export default function NewAdmissionPage() {
                       Amount (text)
                     </Label>
                     <Input
-                      className="h-9"
+                      className="h-10 md:h-9"
                       id="payAmt"
                       value={payAmountText}
                       onChange={(e) => setPayAmountText(e.target.value)}
@@ -522,7 +516,7 @@ export default function NewAdmissionPage() {
                       Amount (numeric)
                     </Label>
                     <Input
-                      className="h-9"
+                      className="h-10 md:h-9"
                       id="payAmtNum"
                       type="number"
                       step="any"
@@ -536,7 +530,7 @@ export default function NewAdmissionPage() {
                       Currency
                     </Label>
                     <Input
-                      className="h-9"
+                      className="h-10 md:h-9"
                       id="payCur"
                       value={payCurrency}
                       onChange={(e) => setPayCurrency(e.target.value)}
@@ -548,7 +542,7 @@ export default function NewAdmissionPage() {
                       Payment URL
                     </Label>
                     <Input
-                      className="h-9"
+                      className="h-10 md:h-9"
                       id="payUrl"
                       type="url"
                       value={payUrl}
@@ -603,7 +597,7 @@ export default function NewAdmissionPage() {
                 <div className="space-y-1">
                   <Label className="text-xs">Stage</Label>
                   <Select value={stage} onValueChange={setStage}>
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className="h-10 md:h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -618,7 +612,7 @@ export default function NewAdmissionPage() {
                 <div className="space-y-1">
                   <Label className="text-xs">Priority</Label>
                   <Select value={priority} onValueChange={setPriority}>
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className="h-10 md:h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -658,7 +652,6 @@ export default function NewAdmissionPage() {
             </form>
           </CardContent>
         </Card>
-      </div>
-    </main>
+    </div>
   );
 }

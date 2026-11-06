@@ -20,6 +20,7 @@ import { DEFAULT_EMAIL_TEMPLATE } from "@/lib/constants/emailTemplate";
 import { EmailDiff } from "@/app/components/EmailDiff";
 import { FileAttachments } from "@/app/components/FileAttachments";
 import { Attachment } from "@/lib/utils/attachments";
+import { PageHeader } from "@/app/components/PageHeader";
 import { PlaceholderValues } from "@/app/components/PlaceholderValues";
 
 interface Application {
@@ -114,7 +115,7 @@ export default function EditApplicationPage() {
       } catch (error) {
         const err = error as Error;
         toast.error(`Error loading application: ${err.message}`);
-        router.push("/");
+        router.push("/applications");
       } finally {
         setIsLoading(false);
       }
@@ -233,7 +234,7 @@ export default function EditApplicationPage() {
       }
 
       toast.success("Application updated successfully!");
-      router.push("/");
+      router.push(`/applications/${id}`);
     } catch (error) {
       const err = error as Error;
       toast.error(`Error updating application: ${err.message}`);
@@ -244,52 +245,38 @@ export default function EditApplicationPage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-4xl mx-auto flex flex-col items-center justify-center h-64 gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground font-medium">Loading application...</p>
-        </div>
-      </main>
+      <div className="flex min-h-[50dvh] flex-col items-center justify-center gap-4 p-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground font-medium">Loading application...</p>
+      </div>
     );
   }
 
   if (!application) {
     return (
-      <main className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
-          <Card>
-            <CardContent className="py-8 text-center">
-              <p className="text-muted-foreground mb-4">Application not found</p>
+      <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-muted-foreground mb-4">Application not found</p>
+            <Button asChild variant="outline">
               <Link href="/applications">
-                <Button variant="outline">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Home
-                </Button>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Applications
               </Link>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-          <Link href="/applications" className="w-full sm:w-auto">
-            <Button variant="outline" size="sm" className="w-full sm:w-auto">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </Link>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold">Edit Application</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">
-              Update application details and email template
-            </p>
-          </div>
-        </div>
+    <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+      <PageHeader
+        title="Edit Application"
+        description="Update application details and email template"
+        backHref={`/applications/${application._id}`}
+      />
 
         <PlaceholderValues
           professorName={recipientName}
@@ -408,8 +395,7 @@ export default function EditApplicationPage() {
             </form>
           </CardContent>
         </Card>
-      </div>
-    </main>
+    </div>
   );
 }
 

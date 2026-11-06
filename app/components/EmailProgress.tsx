@@ -72,8 +72,8 @@ export function EmailProgress({
       <CardContent className="pt-6">
         <div className="space-y-4">
           {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               {getStatusIcon()}
               <div>
                 <h3 className="text-sm font-medium">
@@ -92,8 +92,9 @@ export function EmailProgress({
                   variant="ghost"
                   size="sm"
                   onClick={onPause}
-                  className="h-8 w-8 p-0"
+                  className="h-10 w-10 p-0"
                   title="Pause"
+                  aria-label="Pause"
                 >
                   <Pause className="h-4 w-4" />
                 </Button>
@@ -103,8 +104,9 @@ export function EmailProgress({
                   variant="ghost"
                   size="sm"
                   onClick={onResume}
-                  className="h-8 w-8 p-0"
+                  className="h-10 w-10 p-0"
                   title="Resume"
+                  aria-label="Resume"
                 >
                   <Play className="h-4 w-4" />
                 </Button>
@@ -114,8 +116,9 @@ export function EmailProgress({
                   variant="ghost"
                   size="sm"
                   onClick={onClearCompleted}
-                  className="h-8 w-8 p-0"
+                  className="h-10 w-10 p-0"
                   title="Clear completed"
+                  aria-label="Clear completed"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -125,8 +128,9 @@ export function EmailProgress({
                   variant="ghost"
                   size="sm"
                   onClick={onClear}
-                  className="h-8 w-8 p-0 text-destructive"
+                  className="h-10 w-10 p-0 text-destructive"
                   title="Clear all"
+                  aria-label="Clear all"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -152,11 +156,11 @@ export function EmailProgress({
             <div className="pt-2 border-t space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Current:</span>
-                <span className="font-medium">{currentItem.applicationName}</span>
+                <span className="font-medium truncate ml-2">{currentItem.applicationName}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Email:</span>
-                <span className="text-muted-foreground truncate ml-2 max-w-[200px]">
+                <span className="text-muted-foreground truncate ml-2 max-w-[60%]">
                   {currentItem.email}
                 </span>
               </div>

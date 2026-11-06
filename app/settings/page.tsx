@@ -9,8 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Save, Sparkles, Mail, User, FileText, Wand2, CheckCircle2, Loader2, File, Paperclip, Plus, Upload, Clock, X, Eye, EyeOff, LogOut, ShieldCheck } from "lucide-react";
-import Link from "next/link";
+import { Save, Sparkles, Mail, User, FileText, Wand2, CheckCircle2, Loader2, File, Paperclip, Plus, Upload, Clock, X, Eye, EyeOff, LogOut, ShieldCheck } from "lucide-react";
+import { PageHeader } from "@/app/components/PageHeader";
 import { FormField } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -610,45 +610,32 @@ export default function SettingsPage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-4xl mx-auto flex flex-col items-center justify-center h-64 gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground font-medium">Loading settings...</p>
-        </div>
-      </main>
+      <div className="flex min-h-[50dvh] flex-col items-center justify-center gap-4 p-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground font-medium">Loading settings...</p>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-          <Link href="/" className="w-full sm:w-auto">
-            <Button variant="outline" size="sm" className="w-full sm:w-auto">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </Link>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold">Settings</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">
-              Manage your account, email configuration, template and profile
-            </p>
-          </div>
-          {username && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              className="w-full sm:w-auto shrink-0"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              {isLoggingOut ? "Logging out..." : `Log out${username ? ` (${username})` : ""}`}
-            </Button>
-          )}
-        </div>
+    <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title="Settings"
+          description="Manage your account, email configuration, template and profile"
+          actions={
+            username && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                {isLoggingOut ? "Logging out..." : `Log out${username ? ` (${username})` : ""}`}
+              </Button>
+            )
+          }
+        />
 
         {/* Email Queue Settings Section */}
         <Card>
@@ -814,8 +801,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={() => setShowSmtpPassword((v) => !v)}
-                      className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
-                      tabIndex={-1}
+                      className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label={showSmtpPassword ? "Hide password" : "Show password"}
                     >
                       {showSmtpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -935,7 +921,7 @@ export default function SettingsPage() {
                   <li>• Only placeholders are shared with AI, keeping your privacy protected</li>
                 </ul>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={isSavingProfile} className="w-full sm:w-auto bg-primary hover:bg-primary/90">
                   {isSavingProfile ? (
                     <>
@@ -1028,7 +1014,7 @@ export default function SettingsPage() {
                 )}
               </div>
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <Label>Email Attachments (Optional)</Label>
                     <p className="text-xs text-muted-foreground">
@@ -1040,6 +1026,7 @@ export default function SettingsPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => setIsAttachmentsDialogOpen(true)}
+                    className="w-full sm:w-auto"
                   >
                     <Paperclip className="h-4 w-4 mr-2" />
                     Manage Attachments
@@ -1472,7 +1459,6 @@ export default function SettingsPage() {
             </form>
           </CardContent>
         </Card>
-      </div>
-    </main>
+    </div>
   );
 }

@@ -14,7 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, FileStack, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { PageHeader } from "@/app/components/PageHeader";
+import { FileStack, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 
 interface TemplateSection {
   key: string;
@@ -73,40 +74,56 @@ export default function SopTemplatesListPage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-        <div className="max-w-7xl mx-auto flex items-center justify-center h-[60vh]">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading templates...</p>
-          </div>
+      <div className="flex min-h-[50dvh] items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading templates...</p>
         </div>
-      </main>
+      </div>
     );
   }
 
+  const rowActions = (t: TemplateItem) => (
+    <>
+      <Button variant="outline" size="sm" className="h-10" onClick={() => router.push(`/sop/templates/${t._id}`)}>
+        View
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-10 w-10 p-0"
+        aria-label={`Edit ${t.name}`}
+        onClick={() => router.push(`/sop/templates/${t._id}/edit`)}
+      >
+        <Pencil className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-10 w-10 p-0 text-destructive hover:text-destructive"
+        aria-label={`Delete ${t.name}`}
+        onClick={() => handleDelete(t._id, t.name)}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </>
+  );
+
   return (
-    <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="sm" onClick={() => router.back()}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">SOP Templates</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Define section-based templates. New SOPs can use a template as the base.
-              </p>
-            </div>
-          </div>
-          <Link href="/sop/templates/new">
-            <Button className="bg-primary hover:bg-primary/90">
-              <Plus className="h-4 w-4 mr-2" />
-              New Template
-            </Button>
-          </Link>
-        </div>
+    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title="SOP Templates"
+          description="Define section-based templates. New SOPs can use a template as the base."
+          backHref="/sop"
+          actions={
+            <Link href="/sop/templates/new">
+              <Button className="bg-primary hover:bg-primary/90">
+                <Plus className="h-4 w-4 mr-2" />
+                New Template
+              </Button>
+            </Link>
+          }
+        />
 
         <Card>
           <CardHeader>
@@ -126,56 +143,62 @@ export default function SopTemplatesListPage() {
                 </Link>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Sections</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                <ul className="space-y-3 md:hidden">
                   {templates.map((t) => (
-                    <TableRow key={t._id}>
-                      <TableCell>
-                        <button
-                          type="button"
-                          className="font-medium text-primary hover:underline text-left"
-                          onClick={() => router.push(`/sop/templates/${t._id}`)}
+                    <li key={t._id} className="space-y-3 rounded-lg border p-3">
+                      <div className="min-w-0">
+                        <Link
+                          href={`/sop/templates/${t._id}`}
+                          className="block break-words font-medium text-primary hover:underline"
                         >
                           {t.name}
-                        </button>
+                        </Link>
                         {t.description && (
-                          <p className="text-sm text-muted-foreground mt-0.5">{t.description}</p>
+                          <p className="mt-0.5 break-words text-sm text-muted-foreground">{t.description}</p>
                         )}
-                      </TableCell>
-                      <TableCell>{t.sections?.length ?? 0} sections</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => router.push(`/sop/templates/${t._id}`)}>
-                            View
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => router.push(`/sop/templates/${t._id}/edit`)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(t._id, t.name)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                        <p className="mt-1 text-sm text-muted-foreground">{t.sections?.length ?? 0} sections</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">{rowActions(t)}</div>
+                    </li>
                   ))}
-                </TableBody>
-              </Table>
+                </ul>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Sections</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {templates.map((t) => (
+                        <TableRow key={t._id}>
+                          <TableCell className="max-w-md">
+                            <Link
+                              href={`/sop/templates/${t._id}`}
+                              className="block break-words font-medium text-primary hover:underline"
+                            >
+                              {t.name}
+                            </Link>
+                            {t.description && (
+                              <p className="mt-0.5 break-words text-sm text-muted-foreground">{t.description}</p>
+                            )}
+                          </TableCell>
+                          <TableCell>{t.sections?.length ?? 0} sections</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">{rowActions(t)}</div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
-      </div>
-    </main>
+    </div>
   );
 }

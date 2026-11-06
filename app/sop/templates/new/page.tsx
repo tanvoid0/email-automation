@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form";
-import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
+import { PageHeader } from "@/app/components/PageHeader";
+import { Save, Plus, Trash2 } from "lucide-react";
 import type { TemplateSection } from "@/lib/types/sopTemplate";
 
 const defaultSections: TemplateSection[] = [
@@ -88,22 +89,12 @@ export default function NewSopTemplatePage() {
   };
 
   return (
-    <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Link href="/sop/templates">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">New SOP Template</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Define sections that will appear when creating an SOP from this template.
-            </p>
-          </div>
-        </div>
+      <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title="New SOP Template"
+          description="Define sections that will appear when creating an SOP from this template."
+          backHref="/sop/templates"
+        />
 
         <form onSubmit={handleSubmit}>
           <Card className="mb-6">
@@ -132,7 +123,7 @@ export default function NewSopTemplatePage() {
 
           <Card className="mb-6">
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <CardTitle>Sections</CardTitle>
                   <CardDescription>
@@ -154,7 +145,8 @@ export default function NewSopTemplatePage() {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="text-destructive hover:text-destructive"
+                      className="h-10 w-10 p-0 text-destructive hover:text-destructive"
+                      aria-label={`Remove section ${index + 1}`}
                       onClick={() => removeSection(index)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -182,7 +174,7 @@ export default function NewSopTemplatePage() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
               {isSubmitting ? "Creating..." : <><Save className="h-4 w-4 mr-2" /> Create template</>}
             </Button>
@@ -192,6 +184,5 @@ export default function NewSopTemplatePage() {
           </div>
         </form>
       </div>
-    </main>
   );
 }

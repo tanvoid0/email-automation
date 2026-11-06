@@ -119,7 +119,7 @@ export function AttachmentPreview({
                   : "This file cannot be previewed in the browser. Would you like to download it or open it in a new tab?"}
               </DialogDescription>
             </DialogHeader>
-            <div className="flex justify-end gap-2 pt-4">
+            <div className="flex flex-wrap justify-end gap-2 pt-4">
               <Button
                 variant="outline"
                 onClick={() => setShowDownloadPrompt(false)}

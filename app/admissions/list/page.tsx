@@ -5,17 +5,20 @@ import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
   closestCorners,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useToast } from "@/lib/hooks/useToast";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/app/components/PageHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -42,7 +45,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft,
   ExternalLink,
   GripVertical,
   LayoutGrid,
@@ -95,7 +97,7 @@ function ListRowCells({
   const pct = admissionChecklistProgress(a.checklist ?? []);
   return (
     <>
-      <TableCell>
+      <TableCell className="min-w-[10rem] break-words">
         <Link href={`/admissions/${a._id}`} className="font-medium hover:underline">
           {a.universityName}
         </Link>
@@ -109,7 +111,7 @@ function ListRowCells({
           onValueChange={(v) => onStageChangeRequest(a, v as AdmissionStage)}
         >
           <SelectTrigger
-            className="h-8 w-[min(100%,12rem)] max-w-[220px]"
+            className="h-10 md:h-8 w-[min(100%,12rem)] max-w-[220px]"
             onPointerDown={(e) => e.stopPropagation()}
           >
             <SelectValue />
@@ -222,7 +224,7 @@ function SortableListRow({
       <TableCell className="w-10 pr-2 align-middle">
         <button
           type="button"
-          className="text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-1 rounded-md hover:bg-muted"
+          className="touch-none text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing p-2 rounded-md hover:bg-muted"
           {...listeners}
           {...attributes}
           aria-label="Drag to reorder"
@@ -295,9 +297,9 @@ export default function AdmissionsListPage() {
   };
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    })
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const load = useCallback(async () => {
@@ -347,10 +349,10 @@ export default function AdmissionsListPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-background p-4 md:p-8 flex items-center justify-center gap-3">
+      <div className="flex min-h-[50dvh] items-center justify-center gap-3 p-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <span className="text-muted-foreground">Loading applications…</span>
-      </main>
+      </div>
     );
   }
 
@@ -395,46 +397,40 @@ export default function AdmissionsListPage() {
   );
 
   return (
-    <main className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <Link
-              href="/"
-              className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-2"
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Home
-            </Link>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <School className="h-8 w-8" />
+    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title={
+            <span className="flex items-center gap-2">
+              <School className="h-7 w-7 shrink-0 md:h-8 md:w-8" aria-hidden />
               Your applications
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Track university admissions, scholarships, and documents in one place.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/admissions/settings">
-              <Button variant="outline">
-                <School className="h-4 w-4 mr-2" />
-                Settings
+            </span>
+          }
+          description="Track university admissions, scholarships, and documents in one place."
+          backHref="/admissions"
+          backLabel="Board"
+          actions={
+            <>
+              <Button asChild>
+                <Link href="/admissions/new">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New application
+                </Link>
               </Button>
-            </Link>
-            <Link href="/admissions">
-              <Button variant="outline">
-                <LayoutGrid className="h-4 w-4 mr-2" />
-                Board
+              <Button variant="outline" asChild>
+                <Link href="/admissions">
+                  <LayoutGrid className="h-4 w-4 mr-2" />
+                  Board
+                </Link>
               </Button>
-            </Link>
-            <Link href="/admissions/new">
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New application
+              <Button variant="outline" asChild>
+                <Link href="/admissions/settings">
+                  <School className="h-4 w-4 mr-2" />
+                  Settings
+                </Link>
               </Button>
-            </Link>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         <Card>
           <CardHeader className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -451,7 +447,7 @@ export default function AdmissionsListPage() {
             </div>
             <div className="w-full sm:w-56">
               <Select value={stageFilter} onValueChange={setStageFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-10 md:h-9">
                   <SelectValue placeholder="Stage" />
                 </SelectTrigger>
                 <SelectContent>
@@ -557,7 +553,6 @@ export default function AdmissionsListPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
-    </main>
+    </div>
   );
 }

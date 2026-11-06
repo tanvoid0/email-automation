@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form";
-import { ArrowLeft, Save, Plus, Trash2, Loader2 } from "lucide-react";
+import { PageHeader } from "@/app/components/PageHeader";
+import { Save, Plus, Trash2, Loader2 } from "lucide-react";
 import type { TemplateSection } from "@/lib/types/sopTemplate";
 
 export default function EditSopTemplatePage() {
@@ -109,34 +110,22 @@ export default function EditSopTemplatePage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-        <div className="max-w-3xl mx-auto flex items-center justify-center h-[60vh]">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading template...</p>
-          </div>
+      <div className="flex min-h-[50dvh] items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading template...</p>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Link href={`/sop/templates/${id}`}>
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Edit SOP Template</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Update sections and details.
-            </p>
-          </div>
-        </div>
+      <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title="Edit SOP Template"
+          description="Update sections and details."
+          backHref={`/sop/templates/${id}`}
+        />
 
         <form onSubmit={handleSubmit}>
           <Card className="mb-6">
@@ -165,7 +154,7 @@ export default function EditSopTemplatePage() {
 
           <Card className="mb-6">
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <CardTitle>Sections</CardTitle>
                   <CardDescription>
@@ -187,7 +176,8 @@ export default function EditSopTemplatePage() {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="text-destructive hover:text-destructive"
+                      className="h-10 w-10 p-0 text-destructive hover:text-destructive"
+                      aria-label={`Remove section ${index + 1}`}
                       onClick={() => removeSection(index)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -215,7 +205,7 @@ export default function EditSopTemplatePage() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90">
               {isSubmitting ? "Saving..." : <><Save className="h-4 w-4 mr-2" /> Save changes</>}
             </Button>
@@ -225,6 +215,5 @@ export default function EditSopTemplatePage() {
           </div>
         </form>
       </div>
-    </main>
   );
 }

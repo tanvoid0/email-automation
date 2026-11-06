@@ -55,7 +55,7 @@ function SignupForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+    <div className="min-h-dvh flex items-center justify-center bg-muted/40 px-4 py-[max(1rem,env(safe-area-inset-top))]">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Create your account</CardTitle>
@@ -97,8 +97,7 @@ function SignupForm() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
+                  className="absolute inset-y-0 right-0 flex items-center w-10 justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -139,7 +138,7 @@ function SignupForm() {
 export default function SignupPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="min-h-dvh flex items-center justify-center bg-muted/40 px-4 py-[max(1rem,env(safe-area-inset-top))]">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Loading...</CardTitle>

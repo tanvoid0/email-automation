@@ -63,8 +63,36 @@
   * {
     @apply border-border;
   }
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+  }
+  ::selection {
+    background-color: hsl(var(--primary) / 0.14);
+  }
+  /* Kill the 300ms double-tap-zoom delay on controls */
+  a,
+  button,
+  input,
+  label,
+  select,
+  summary,
+  textarea,
+  [role="button"],
+  [role="tab"] {
+    touch-action: manipulation;
+  }
+  /* Form fields below 16px make iOS Safari zoom on focus. The :not() parts
+     lift specificity above Tailwind's single-class text-* utilities. */
+  @media (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select:not([hidden]),
+    textarea:not([hidden]) {
+      font-size: max(16px, 1em);
+    }
   }
 }
 

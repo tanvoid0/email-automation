@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useToast } from "@/lib/hooks/useToast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/app/components/PageHeader";
 import { ArrowLeft, Pencil, Loader2 } from "lucide-react";
 
 interface TemplateSection {
@@ -54,64 +55,50 @@ export default function ViewSopTemplatePage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-        <div className="max-w-3xl mx-auto flex items-center justify-center h-[60vh]">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading template...</p>
-          </div>
+      <div className="flex min-h-[50dvh] items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading template...</p>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (!template) {
     return (
-      <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-        <div className="max-w-3xl mx-auto">
-          <Card>
-            <CardContent className="py-8 text-center">
-              <p className="text-muted-foreground mb-4">Template not found.</p>
-              <Link href="/sop/templates">
-                <Button variant="outline">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to templates
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="mx-auto max-w-4xl p-4 md:p-8">
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-muted-foreground mb-4">Template not found.</p>
+            <Link href="/sop/templates">
+              <Button variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to templates
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   const sortedSections = [...(template.sections || [])].sort((a, b) => a.order - b.order);
 
   return (
-    <main className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link href="/sop/templates">
+      <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title={<span className="break-words">{template.name}</span>}
+          description={template.description}
+          backHref="/sop/templates"
+          actions={
+            <Link href={`/sop/templates/${id}/edit`}>
               <Button variant="outline" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
+                <Pencil className="h-4 w-4 mr-2" />
+                Edit
               </Button>
             </Link>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">{template.name}</h1>
-              {template.description && (
-                <p className="text-sm text-muted-foreground mt-1">{template.description}</p>
-              )}
-            </div>
-          </div>
-          <Link href={`/sop/templates/${id}/edit`}>
-            <Button variant="outline" size="sm">
-              <Pencil className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
-          </Link>
-        </div>
+          }
+        />
 
         <Card>
           <CardHeader>
@@ -135,6 +122,5 @@ export default function ViewSopTemplatePage() {
           </CardContent>
         </Card>
       </div>
-    </main>
   );
 }

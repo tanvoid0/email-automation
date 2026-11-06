@@ -121,7 +121,7 @@ export function PlaceholderValues({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <CardTitle className="text-base">Placeholder Values</CardTitle>
             <CardDescription className="text-xs mt-1">
               {isExpanded ? (
@@ -143,7 +143,8 @@ export function PlaceholderValues({
             variant="ghost"
             size="sm"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="h-8 w-8 p-0"
+            className="h-10 w-10 p-0"
+            aria-label={isExpanded ? "Collapse placeholders" : "Expand placeholders"}
           >
             {isExpanded ? (
               <ChevronUp className="h-4 w-4" />

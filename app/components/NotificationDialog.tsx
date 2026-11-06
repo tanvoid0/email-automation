@@ -226,7 +226,7 @@ export function NotificationDialog({
             <div className="mt-2">
               <button
                 onClick={() => toggleExpand(notification._id || "")}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                className="flex min-h-10 items-center gap-1 text-xs text-muted-foreground hover:text-foreground sm:min-h-0"
               >
                 {isExpanded ? (
                   <ChevronUp className="h-3 w-3" />
@@ -265,12 +265,12 @@ export function NotificationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-2xl max-h-[85dvh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Notifications</DialogTitle>
         </DialogHeader>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-4">
           <Select value={filterType} onValueChange={setFilterType}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Type" />
@@ -295,7 +295,7 @@ export function NotificationDialog({
             </SelectContent>
           </Select>
 
-          <div className="flex-1" />
+          <div className="hidden flex-1 sm:block" />
 
           <Button
             variant="outline"
@@ -313,7 +313,7 @@ export function NotificationDialog({
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-2">
+        <div className="min-h-0 flex-1 overflow-y-auto space-y-2">
           {isLoading ? (
             <div className="text-center py-8 text-muted-foreground">
               Loading notifications...
@@ -333,7 +333,7 @@ export function NotificationDialog({
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1 break-words">
                     <div className="flex items-center gap-2 mb-1">
                       <Badge
                         variant="outline"
@@ -348,14 +348,15 @@ export function NotificationDialog({
                     <div className="font-medium mb-1">{notification.title}</div>
                     {renderNotificationContent(notification)}
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex shrink-0 items-center">
                     {!notification.read ? (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-10 w-10 sm:h-8 sm:w-8"
                         onClick={() => handleMarkRead(notification._id!, true)}
                         title="Mark as read"
+                        aria-label="Mark as read"
                       >
                         <Check className="h-4 w-4" />
                       </Button>
@@ -363,9 +364,10 @@ export function NotificationDialog({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-10 w-10 sm:h-8 sm:w-8"
                         onClick={() => handleMarkRead(notification._id!, false)}
                         title="Mark as unread"
+                        aria-label="Mark as unread"
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -373,9 +375,10 @@ export function NotificationDialog({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-10 w-10 sm:h-8 sm:w-8"
                       onClick={() => handleDelete(notification._id!)}
                       title="Delete"
+                        aria-label="Delete"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
